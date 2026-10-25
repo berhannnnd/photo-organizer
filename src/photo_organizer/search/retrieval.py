@@ -6,7 +6,7 @@ import json
 from photo_organizer.core.errors import CapabilityError
 from photo_organizer.search import results
 from photo_organizer.search.embeddings import initialize, pack, provider_for, register, unpack
-from photo_organizer.search.selection import members, save
+from photo_organizer.search.selection import members, retrieval_context, save
 from photo_organizer.storage.catalog import connect
 
 
@@ -105,12 +105,14 @@ def vector_search(state, space_id, text=None, reference_id=None, parent_id=None,
             ranked[:top_k],
             {"retrieval": criterion, "space_id": space_id, "top_k": top_k},
             parent_id,
-            {
-                "coverage": "ranked_subset",
-                "requirements": [criterion],
-                "scope_count": len(rows),
-                "indexed": indexed,
-            },
+            retrieval_context(
+                c,
+                parent_id,
+                criterion,
+                coverage="ranked_subset",
+                scope_count=len(rows),
+                indexed=indexed,
+            ),
         )
     return results.page(state, rid)
 
@@ -240,13 +242,15 @@ def search(
             chosen,
             {"retrieval": text, "top_k": top_k, "ranking": ranking},
             parent_id,
-            {
-                "coverage": "ranked_subset",
-                "requirements": [text],
-                "scope_count": len(rows),
-                "channel_coverage": coverage,
-                "fallbacks": errors,
-            },
+            retrieval_context(
+                c,
+                parent_id,
+                text,
+                coverage="ranked_subset",
+                scope_count=len(rows),
+                channel_coverage=coverage,
+                fallbacks=errors,
+            ),
             {fid: {"channels": provenance[fid]} for fid in ranked},
         )
     return {

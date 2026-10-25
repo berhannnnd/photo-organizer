@@ -89,7 +89,11 @@ def _run(state, task_id):
             model = operation in MODEL_JOBS
             reached = (
                 progress["seconds"] >= budget.get("max_seconds", float("inf"))
-                or progress.get("images", 0) >= budget.get("max_images", float("inf"))
+                or (
+                    item["attempts"] == 0
+                    and operation not in ("scan", "apply")
+                    and progress.get("images", 0) >= budget.get("max_images", float("inf"))
+                )
                 or model
                 and progress.get("requests", 0) >= budget.get("max_requests", float("inf"))
                 or model

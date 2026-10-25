@@ -1,63 +1,62 @@
 # Delivery and release evidence
 
-Date: 2026-10-25. Development resumed by explicit user instruction after PRD v0.6.
-The goal is a community-usable project, not a fixed demo. This checklist does not narrow
-any PRD requirement. An unchecked item is not delivered merely because its design exists.
+Date: 2026-10-25. Target: PRD v0.7, portable Skill for tool-capable agents,
+including text-only hosts with separately configured visual services. This document
+separates implementation from acceptance; it does not reduce the PRD scope.
 
-## Current foundation
+## Implemented development baseline
 
-- [x] Shared JSON service boundary and CLI; optional official-SDK stdio MCP transport.
-- [x] Portable Skill with actual capability discovery and explicit fallback limits.
-- [x] Persistent result membership, parent filtering, pagination, restart reuse and stale rejection.
-- [x] Conservative boolean conditions, explicit unknowns, no negative inference from absent tags.
-- [x] Non-destructive plan/export, no-clobber execution, receipts and source revalidation.
-- [x] Optional explicit model config, with no mandatory CC Switch/Nexus dependency.
-- [x] Packaging metadata, bundled Skill, local install instructions, test CI definition.
+- Domain packages for storage, library, search, vision, capability adapters,
+  organization, runtime and transports; thin compatibility entrypoints.
+- Versioned catalog migration, registered root scans, rename identity, offline/partial
+  scan handling, opt-in polling and derivative retention.
+- Immutable results, explicit selection/ranking, set operations, scoped refinement,
+  unknown/unanalyzed distinction, user semantic corrections and host evidence.
+- Image/text and description vector spaces, host vector submission, reference-image
+  retrieval, channel coverage and reciprocal-rank fusion with explicit text fallback.
+- Role configuration and real-input probes for vision, embedding, OCR and faces;
+  optional local engines and host submissions do not require host-native vision.
+- Automatic grouping suggestions, editable nested groups, naming, overlap policies,
+  collections, bounded compression, non-destructive export and action receipts.
+- Durable job items, detached worker, pause/cancel/recovery, configuration revisions,
+  retry limits and conservative request/image/time/cost bounds.
+- CLI and MCP share operations and argument discovery; packaged Skill describes
+  the actual workflow. Ruff formatting/lint and wheel/sdist builds are configured.
 
-## Required before community release
+## Current validation
 
-- [ ] Versioned catalog migrations and consistent root/scan revision contracts.
-- [ ] Complete incremental lifecycle: offline roots, move identity, partial scans, watcher,
-      stage invalidation and retention. Current scan handles basic addition/change/deletion only.
-- [ ] Durable tasks with pause/cancel/recovery, budgets, bounded scheduling and query priority.
-- [ ] Image/text embedding provider, model digest isolation, query caching and mixed retrieval.
-- [ ] Separate unknown vs unanalyzed evidence throughout the query and result model.
-- [ ] Full multi-level/group-overlap/naming rules and persistent user corrections.
-- [ ] Automatic grouping, same-person capability, OCR precision paths and fine-detail review.
-- [ ] Provider capability probes and complete structured diagnostic/error taxonomy.
-- [ ] Full-scope semantic coverage ledger and remaining set algebra operations.
-- [ ] Independent host acceptance through both CLI and MCP; a test SDK client is not a second agent host.
-- [ ] Fixed held-out semantic benchmark, human quality assessment and load performance gates.
-- [ ] Clean-environment installation and remote CI results on every supported platform.
-- [ ] Select open-source code license, review image/source licensing and publish repository/package.
+The current regression suite has 47 tests. It exercises real stdio MCP, a loopback
+HTTP provider fixture, detached worker execution, snapshot composition, host vectors,
+retrieval lineage, stale selection rejection, filesystem export and scan lifecycle.
+Ruff lint and formatting checks pass. Wheel and source archive build successfully.
+The wheel installed in a fresh virtual environment outside the checkout; all 47 tests
+passed there too, and the bundled Skill was present. Skill validation also passed.
+These are deterministic engineering checks, not evidence of real model accuracy.
 
-## Local evidence
+Earlier local metadata latency measurements and catalog counts belong to an older
+baseline and are not presented as current acceptance evidence. The benchmark tools
+remain available for explicit model/collection testing.
 
-The original 15 prototype tests passed before modification. New regression tests cover
-cross-process result reuse, new-file scope exclusion, stale source rejection, conservative
-boolean logic, overlapping rules, explicit provider configuration and album revalidation.
-The automated MCP integration test uses the official client to start a real stdio server,
-then runs scan → search → refinement → plan → apply and checks CLI reads the same result.
-Run results are recorded in `benchmarks/results/` locally; they are not semantic accuracy claims.
+## Open engineering audit
 
-Local macOS tests do not establish Linux CI or Windows compatibility. No remote model
-request or full-library model indexing is needed for these foundational checks.
+Before claiming the entire PRD implemented, close the following boundaries:
 
-### Verified in this development batch
+- Cross-job provider concurrency and interactive priority; cache-aware request budgets,
+  durable binding of initially missing capabilities and Retry-After handling.
+- Full typed operation schemas and bounded paging for every group/identity/collection
+  response; configurable metadata corrections beyond semantic judgments.
+- Result evidence freshness/coverage across every stage, offline snapshot planning,
+  output collision reporting at plan time and color-profile normalization.
+- Full regression coverage for separate description spaces, provider response failures,
+  interrupted scans, nested root ownership and crash/control races.
 
-- 23 tests passed in the development environment, including a real MCP stdio roundtrip.
-- A wheel installed in a new isolated virtual environment (not editable, no repository
-  import path); all 23 tests passed again, with the bundled Skill present.
-- Wheel and source archive built successfully. Distribution contents exclude photographs,
-  local catalogs and credentials; source archive includes the documentation.
-- Skill frontmatter/reference validation passed.
-- Existing catalog still contains 1000 files; 109 have historical completed visual facts,
-  1 historical error, 890 pending, and 0 capture dates. This batch made no model requests.
-- Metadata-only snapshot creation on a temporary backup of that 1000-file catalog:
-  50 measurements, median 4.91 ms, p95 5.47 ms. This is a narrow local measurement,
-  not semantic-search latency or completion of the PRD performance protocol.
+## Acceptance still required
 
-Implementation order from here: finish catalog/task lifecycle and incremental consistency;
-then integrate the installed Ollama artifact and mixed retrieval; then complete composable
-organization rules and user corrections; finally run independent-host and fixed quality
-acceptance. Packaging, regression tests and capability documentation evolve with each batch.
+- Independent agent hosts through CLI and MCP; an SDK test client is not another host.
+- Actual configured OCR/vision/embedding/face model checks, human-labeled held-out
+  quality benchmark, complete-scope semantic coverage and library-scale load tests.
+- Remote Linux/macOS CI results and supported-platform clean-environment installation.
+- Final PRD traceability review before community release. Windows remains unsupported.
+
+Do not treat a supported adapter, successful protocol probe or implemented operation
+as a guarantee of semantic quality, exhaustive recall or completed release acceptance.

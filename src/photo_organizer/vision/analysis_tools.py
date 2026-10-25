@@ -12,7 +12,7 @@ from PIL import Image, ImageFilter, ImageStat
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.capabilities.registry import get_config, vision
 from photo_organizer.core.errors import CapabilityError
-from photo_organizer.search.selection import context, members, now, save
+from photo_organizer.search.selection import context, members, now, retrieval_context, save
 from photo_organizer.storage.catalog import connect
 
 
@@ -242,13 +242,15 @@ def text_search(state, text, parent_id=None, field="ocr", top_k=50):
             found[:top_k],
             {"text_search": text, "field": field},
             parent_id,
-            {
-                "coverage": "text_candidates",
-                "requirements": [text],
-                "scope_count": len(rows),
-                "indexed": covered,
-                "total_text_hits": len(found),
-            },
+            retrieval_context(
+                c,
+                parent_id,
+                text,
+                coverage="text_candidates",
+                scope_count=len(rows),
+                indexed=covered,
+                total_text_hits=len(found),
+            ),
         )
     return results.page(state, rid)
 

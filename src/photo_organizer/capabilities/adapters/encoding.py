@@ -9,6 +9,10 @@ from photo_organizer.core.errors import CapabilityError
 
 class Encoder:
     def __init__(self, config):
+        if config["protocol"] == "host":
+            raise CapabilityError(
+                "host_action_required", "Submit host vectors and use vector-search"
+            )
         self.config = config
         self.model = config["model"]
         self.endpoint = config["endpoint"]

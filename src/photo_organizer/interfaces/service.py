@@ -12,6 +12,7 @@ from photo_organizer.storage.catalog import connect, report
 
 API_VERSION = "2"
 OPERATIONS = (
+    "operation-schema",
     "capabilities",
     "status",
     "scan",
@@ -49,13 +50,17 @@ def dispatch(state, operation, arguments):
                 ],
                 "result_snapshots": True,
                 "models_required_for_metadata": False,
-                "vision_protocols": ["anthropic"],
+                "vision_protocols": ["anthropic", "openai", "ollama", "host"],
                 "limitations": [
                     "POSIX only; Windows unsupported",
                     "legacy direct calls are synchronous; use job-start for durable execution",
                     "independent human quality and cross-host release acceptance pending",
                 ],
             }
+        elif operation == "operation-schema":
+            from photo_organizer.interfaces.discovery import operation_schema
+
+            data = operation_schema(state, **arguments)
         elif operation in EXTENSIONS:
             data = EXTENSIONS[operation](state, **arguments)
         elif operation == "status":
@@ -105,7 +110,11 @@ def dispatch(state, operation, arguments):
             data = apply(state, **arguments)
         else:
             return failure("unsupported_operation", "unknown operation")
-        status = "partial_failed" if data.get("errors") or data.get("file_errors") else "completed"
+        status = (
+            "partial_failed"
+            if data.get("errors") or data.get("file_errors") or data.get("failed_now")
+            else "completed"
+        )
         return {"api_version": API_VERSION, "status": status, "data": data, "error": None}
     except CapabilityError as error:
         return {

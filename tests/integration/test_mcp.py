@@ -40,6 +40,8 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(body["status"], "completed", body)
                         return body["data"]
 
+                    schema = await call("photo_operation_schema", {"operation": "retrieve"})
+                    self.assertIn("parent_id", {p["name"] for p in schema["arguments"]})
                     await call("photo_scan", {"root": str(root)})
                     result = await call("photo_search", {"rule": {}})
                     child = await call(

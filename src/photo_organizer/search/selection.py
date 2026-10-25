@@ -19,23 +19,52 @@ def context(c, rid):
     row = results.require(c, rid)
     rule = json.loads(row["rule"])
     if "retrieval" in rule:
-        return {"coverage": "ranked_subset", "requirements": [rule["retrieval"]], "origin": rid}
+        inherited = context(c, row["parent_id"]) if row["parent_id"] else {}
+        return {
+            **inherited,
+            "coverage": "ranked_subset",
+            "requirements": sorted(set(inherited.get("requirements", [])) | {rule["retrieval"]}),
+            "origin": rid,
+        }
     if row["parent_id"]:
         return context(c, row["parent_id"])
     return {"coverage": "evaluated_scope", "requirements": [], "origin": rid}
+
+
+def retrieval_context(c, parent_id, criterion, **coverage):
+    """Retain every unresolved ancestor criterion when narrowing a candidate scope."""
+    inherited = context(c, parent_id)
+    return {
+        **inherited,
+        **coverage,
+        "explicit_selection": False,
+        "requirements": sorted(set(inherited.get("requirements", [])) | {criterion}),
+    }
 
 
 def members(c, rid, verdicts=("matched", "candidate")):
     results.require(c, rid)
     if results.stale_count(c, rid):
         raise ValueError("snapshot has stale members; refresh explicitly")
-    return [
+    rows = [
         dict(r)
         for r in c.execute(
             "SELECT * FROM result_members WHERE result_id=? ORDER BY score DESC,file_id", (rid,)
         )
         if r["verdict"] in verdicts
     ]
+    for row in rows:
+        current = c.execute(
+            "SELECT hash,present,error FROM files WHERE id=?", (row["file_id"],)
+        ).fetchone()
+        if (
+            not current
+            or not current["present"]
+            or current["error"]
+            or current["hash"] != row["hash"]
+        ):
+            raise ValueError("snapshot has stale members; refresh explicitly")
+    return rows
 
 
 def save(c, rows, rule, parent_id=None, ctx=None, details=None):
@@ -176,7 +205,7 @@ def combine(state, result_ids, operation="union", identity="file"):
             "coverage": "composed_scopes",
             "inputs": result_ids,
             "input_contexts": contexts,
-            "requirements": [],
+            "requirements": sorted({r for ctx in contexts for r in ctx.get("requirements", [])}),
             "duplicate_instances": {k: sorted(v) for k, v in copies.items() if len(v) > 1},
         }
         rid = save(

@@ -1,18 +1,45 @@
 ---
 name: photo-organizer
-description: Search and organize local photographs using the photo-organizer engine, persistent result sets, and non-destructive export plans. Use for photo-library search, repeated filtering, grouping, and compression. Requires a locally installed engine or its MCP server.
+description: Search, refine, group and organize local photos through persistent selections and non-destructive export plans. Use with the photo-organizer CLI or MCP engine; supports text-only agents with configured visual services.
 ---
 
-Use the engine for file operations; do not generate ad hoc traversal or move scripts.
-Read [tools](references/tools.md) for commands, rule syntax, and current limitations.
+The host agent chooses the workflow and grouping. The engine owns indexing, scoped
+evidence, persistent selections and file execution. Read [tools](references/tools.md)
+for operation discovery and examples; use the same library state across turns.
 
-1. Discover actual capabilities using `photo_capabilities` or the CLI equivalent. The target PRD is not evidence that a feature is implemented. Reuse the user's chosen library state directory across turns.
-2. Clarify missing decisions that materially change scope, subjective criteria, grouping, or output. Reuse answers already given. If the user delegates exploration, explain the chosen criteria and return candidates; do not invent a universal meaning of subjective words. Waiting is not consent.
-3. Sync authorized source roots when freshness matters. Use existing index coverage to decide whether a task can proceed. Metadata operations need no model. Never infer capture dates from download times or names from faces.
-4. For visual indexing, explain required capability and transmission scope. Accept an explicit config/environment reference or an available authorized host tool; never retrieve a host's login token. Missing APIs must yield a disclosed limited mode, not fabricated visual facts. No model is downloaded automatically.
-5. Search into a persistent result ID. A second filter uses `parent_id`; a broader request may require the parent or library scope. Pagination is not a smaller selection. If “those” could refer to multiple results, ask which.
-6. Report coverage for the stage actually used: image-vector coverage, visual-observation coverage, and criterion-review coverage are separate. Missing captions do not exclude a file with an existing image vector from image retrieval. Do not infer one stage's coverage from another. Absence from tags is unknown, not proof of absence. Boolean negatives require explicit evidence. Report unknown, unanalyzed, failed, stale, and unavailable information; the current engine combines unknown/unanalyzed counts. Indexed model judgments are fallible.
-7. Vector results and their filtered descendants remain candidates. When the user explicitly wants to organize those candidates, pass `accept_candidates: true`; otherwise review them or collect explicit semantic judgments first. Plan using `result_set_id` to organize the entire selected snapshot. Inspect counts, grouping, conflicts, target and source state. Resolve material ambiguities; execute within existing user authorization without asking again for the same action.
-8. Use `photo_apply` or CLI equivalent for approved plans. Originals remain unchanged. Reconcile receipts before retrying; never overwrite a destination, treat a filtered-history rollback as file rollback, or claim success with failed items.
+- Discover capabilities and configured roles before choosing an analysis route.
+  Metadata needs no model. For visual tasks, use an authorized host tool or configure
+  OCR, image/text embedding, vision or face endpoints separately. A text-only agent
+  can use those services. Missing capabilities require configuration or a disclosed
+  limited workflow; never invent observations or read another application's login tokens.
+  Explain remote image transmission when configuring a remote provider. No models
+  are downloaded automatically; a successful probe verifies protocol, not quality.
+- Sync authorized roots when freshness matters. Capture dates, file timestamps and
+  import times are different evidence. Faces receive stable cluster IDs, not guessed
+  real names. Read the user's corrections before making another inference.
+- Search into a persistent result ID. Use `parent_id` for second-stage filtering or
+  retrieval; use explicit selections or set operations to compose results. Pagination
+  does not change membership. A broader request needs a broader parent scope.
+- Keep vector candidates distinct from semantic matches. Review exact outstanding
+  criteria and filter by those judgments to establish matches, or record an explicit
+  agent/user selection when asked to curate freely. `order` only ranks members.
+  Selecting candidates for organization is permitted within user authorization,
+  but does not prove their semantics. Report ranked-subset coverage even after review;
+  Top-K cannot prove an exhaustive library search.
+- Inspect unknown, unanalyzed, failed and stale counts separately. Missing tags are
+  not evidence of absence. Boolean negatives require actual evidence. Use bounded
+  image/crop reads for visual inspection or configured vision review for text-only
+  hosts; submit observations with file IDs, hashes, source and condition version.
+- Compose groups freely using nested paths and membership IDs. Rename, merge or
+  split through successor proposals. Choose overlap precedence or multi-membership
+  according to user intent. Plan with the whole selected result ID, inspect actions,
+  counts, target and conflicts, then apply within existing authorization. Do not ask
+  again for the same authorized action. Originals remain unchanged.
+- For larger work use durable jobs with scope and budgets. Report `needs_input`,
+  partial failures and in-flight control boundaries. Resume preserved progress;
+  inspect execution receipts before retrying. A collection can be selected again.
 
-Current alpha supports deterministic metadata and indexed evidence. Local Ollama image/text retrieval returns ranked candidates, not verified matches. Composable grouping levels and explicit overlap policies are available. Automatic grouping, same-person clustering, persistent user corrections and durable background jobs are not yet available. If the request needs them, explain the gap; do not disguise keyword matching as equivalent search. Do not claim community release readiness from a local smoke test.
+Reuse prior scope and preference decisions. Ask only when missing information changes
+what photos or output the user wants. Subjective choices may be made when delegated;
+state the criterion instead of presenting it as universal. Never claim real-model
+accuracy, exhaustive coverage or independent-host acceptance from local code tests.

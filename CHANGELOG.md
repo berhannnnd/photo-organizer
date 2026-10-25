@@ -2,6 +2,12 @@
 
 ## 0.2.0a2 — unreleased
 
+- Split source into domain packages and separate unit/integration tests; enforce Ruff style in CI.
+- Add explicit selections, set composition, host evidence/vectors and persistent collections.
+- Add configurable visual capability adapters, grouping suggestions and durable job checkpoints.
+- Preserve unresolved semantic requirements through repeated retrieval and composed result sets.
+- Share operation discovery between CLI and MCP and update the portable Skill workflow.
+
 - Add digest-bound local Ollama image/text index, cached queries and optional image/description rank fusion.
 - Keep retrieved candidates distinct from verified matches and preserve candidate provenance through refinement.
 - Support up to eight grouping levels and explicit unique/priority/multiple membership policies.

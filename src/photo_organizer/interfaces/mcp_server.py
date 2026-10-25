@@ -94,27 +94,8 @@ def main():
 
     @mcp.tool()
     def photo_operation_schema(operation: str) -> dict:
-        """Discover arguments for an extended operation; no state changes."""
-        import inspect
-
-        from photo_organizer.interfaces.operations import OPERATIONS
-
-        function = OPERATIONS.get(operation)
-        if not function:
-            return {"error": "unknown extended operation"}
-        return {
-            "operation": operation,
-            "description": function.__doc__,
-            "arguments": [
-                {
-                    "name": p.name,
-                    "required": p.default is inspect.Parameter.empty,
-                    **({} if p.default is inspect.Parameter.empty else {"default": p.default}),
-                }
-                for p in inspect.signature(function).parameters.values()
-                if p.name != "state"
-            ],
-        }
+        """Discover accepted arguments through the same contract as CLI."""
+        return dispatch(args.state, "operation-schema", {"operation": operation})
 
     mcp.run(transport="stdio")
 

@@ -1,4 +1,4 @@
-# Tool contract v1 (alpha)
+# Tool contract v2 (alpha)
 
 MCP names: `photo_capabilities`, `photo_status`, `photo_scan`, `photo_search`,
 `photo_results`, `photo_plan`, `photo_apply`.
@@ -26,17 +26,17 @@ Rules support `and: [rules]`, `or: [rules]`, `not: rule`, `date_from`, `date_to`
 No user-provided SQL or executable expressions are accepted.
 
 Result pages have a stable ID, parent ID, membership counts, stale count, and next offset.
-`verdict` can be `matched`, `not_matched`, `unknown_or_unanalyzed`, or `error`.
+`verdict` can be `matched`, `candidate`, `not_matched`, `unknown`, `unanalyzed`, or `error` (legacy results may contain `unknown_or_unanalyzed`).
 Unknowns can be inspected separately, but are never silently included in matched members.
-Parent refinement acts on matched members only. A stale parent must be explicitly refreshed.
+Parent refinement acts on matched and candidate members only. A stale parent must be explicitly refreshed.
 
 Plan modes: `album`, `copy`, `compress`. Copy/compress require an absolute `target`
 outside all source roots. `spec` accepts `result_set_id` (or legacy `filter`, not both),
 `group_by: none|month|category|rules`, `groups: [{name,where}]`, `quality: 1..95`,
-`long_edge: 64..8192`. Overlap is currently rejected for clarification.
+`long_edge: 64..8192`. Rule-based levels accept an explicit overlap policy as described below.
 Group and quality options beyond this contract are unsupported, not silently ignored.
 
-Vision indexing uses:
+Legacy explicit-config vision indexing uses:
 `photo-organizer --state /absolute/library-state index --config /absolute/provider.json --limit 5`.
 Config fields: `protocol: anthropic`, exact HTTPS `endpoint`, `model`, `api_key_env`.
 Only read the named environment variable. Larger batches follow actual user scope and budget.
@@ -54,7 +54,7 @@ repeated identical queries reuse the versioned vector cache.
 
 Candidate sets require `accept_candidates: true` in plan specs when the user has
 explicitly requested organization of candidates. Do not portray these as verified
-matches. Refining them inherits candidate status and cannot expand their scope.
+matches. Refinement cannot expand their scope. Only proving outstanding semantic criteria or making an explicit selection removes the candidate restriction.
 
 `levels` replaces legacy `group_by` and `groups`, supports up to eight levels:
 `[{"field":"year"},{"field":"category"},{"field":"orientation"}]`.
@@ -70,14 +70,12 @@ criterion using the host's configured vision provider. Start the MCP server with
 CRITERION --result-set-id ID`. Subsequent search uses `semantic: CRITERION` inside the
 same parent scope. This is needed when negative/relational facts cannot be proven by tags.
 
-`call describe-index` embeds current visual descriptions in the same model space. Default
-retrieval uses reciprocal-rank fusion only when both channels cover the selected scope;
-otherwise it explicitly reports image-only ranking and description coverage.
+`call describe-index` embeds current visual descriptions using the configured description-text role, or the image/text model when no separate role is configured. Retrieval fuses channel ranks, never vectors from different spaces, and reports each channel's coverage. `allow_text_fallback: true` explicitly permits literal OCR/caption fallback when an encoder is unavailable; inspect returned failures.
 
-## v2 composable selections and evidence
+## Composable selections and evidence
 
 Use `photo_call(operation, arguments)` for extended operations. Discover their
-arguments through `photo_operation_schema`; CLI uses the same `call` operations.
+arguments through `photo_operation_schema`; CLI uses `call operation-schema --args '{"operation":"select"}'`. Both return the standard response envelope. CLI uses the same `call` operations.
 
 - `select(result_id, ids, mode=keep|exclude|order, source=agent|user, reason)`
   saves an explicit selection. `order` includes every current member. Explicit
@@ -106,3 +104,30 @@ Unknown and unanalyzed are now separate verdicts. A candidate's exact retrieval
 criterion can be reviewed and used as a semantic filter to produce evidence matches;
 its context still reports ranked-subset coverage. Filtering only by unrelated metadata
 does not prove the original semantic request.
+
+
+## Configurable capabilities and persistent work
+
+Discover accepted arguments before calling an unfamiliar operation. Role names are
+`vision`, `image_text`, `description_text`, `ocr`, `faces`. Use `capability-configure`,
+`capability-probe` and `capability-status`. Credentials are named environment references;
+never embed secrets in result records or provider URLs. Host capabilities use explicit
+submission rather than pretending the engine can invoke an arbitrary host tool.
+
+- `vector-submit` imports bounded host image/query vectors with a declared space,
+  model and revision. `vector-search` uses a cached query or reference photo in that
+  exact space. `retrieve` calls a configured encoder and fuses available channels.
+- `analysis-submit` accepts scoped OCR/quality observations; `analyze` invokes the
+  configured OCR service or local technical metrics. `text-search` returns literal
+  candidates, not semantic proof. `rank` preserves scope and reports unmeasured items.
+- `face-submit`, `people-cluster` and `people` support face features and editable
+  identities. `group-suggest` proposes themes, events, people, duplicates or similar
+  images; inspect its evidence before adopting the proposal.
+- `job-start`, `job-status`, `job-control` and `job-recover` persist work across
+  requests. Poll status; queued/running is not completion. Pause/cancel stop future
+  dispatch after an in-flight item finishes. Missing capabilities produce needs-input.
+- `roots`, `sync`, `watch` and `cache-cleanup` manage registered libraries, optional
+  polling and derivative retention. Offline roots do not mean their photos were deleted.
+
+Technical quality scores are descriptive signals, not calibrated aesthetic judgments.
+Face and semantic quality depend on the actual configured models and photo collection.
