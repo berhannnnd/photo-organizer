@@ -11,7 +11,8 @@ from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.capabilities.registry import get_config
 from photo_organizer.core.errors import CapabilityError
 from photo_organizer.core.paging import page, validate
-from photo_organizer.runtime.context import admit, checkpoint
+from photo_organizer.library.imaging import PREPROCESSING
+from photo_organizer.runtime.context import admit, checkpoint, commit_guard
 from photo_organizer.search.selection import members, now
 from photo_organizer.storage.catalog import connect, writer_lock
 
@@ -67,6 +68,7 @@ def submit(state, result_id, records, space, source, version):
     if not isinstance(records, list) or not 1 <= len(records) <= 100:
         raise ValueError("provide 1..100 face records")
     with writer_lock(state), connect(state) as c:
+        commit_guard(c)
         scope = {r["file_id"]: r for r in members(c, result_id)}
         validated = []
         for r in records:
@@ -105,7 +107,9 @@ def index_one(state, result_id, row):
     config = get_config(state, "faces")
     with connect(state) as c:
         path = c.execute("SELECT derivative FROM assets WHERE hash=?", (row["hash"],)).fetchone()[0]
-    revision = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+    revision = hashlib.sha256(
+        json.dumps([config, PREPROCESSING], sort_keys=True).encode()
+    ).hexdigest()
     if config["protocol"] == "opencv":
         revision = hashlib.sha256(
             (
@@ -134,6 +138,7 @@ def index_one(state, result_id, row):
             revision,
         )
     with connect(state) as c:
+        commit_guard(c)
         c.execute(
             "INSERT INTO observations VALUES(?,?,?,?,?,?,?)",
             (

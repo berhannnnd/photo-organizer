@@ -131,3 +131,32 @@ submission rather than pretending the engine can invoke an arbitrary host tool.
 
 Technical quality scores are descriptive signals, not calibrated aesthetic judgments.
 Face and semantic quality depend on the actual configured models and photo collection.
+
+## Rules, corrections and completeness
+
+`operation-schema` returns `input_schema` (JSON Schema 2020-12) in addition to argument
+names/defaults. The service validates it before dispatch. Query rules also support
+explicit `date_basis: capture|import|modified`, `roots`, `path_prefix`, `person_ids`,
+`location_box: [south,west,north,east]`, decoded `formats`, width/height and byte bounds.
+Plan `spec.date_basis` controls date grouping/naming; do not silently substitute file dates.
+
+- `metadata-correct(result_id, records, reason)` takes `{file_id,hash,changes}` records.
+  Fields: taken, category, caption, latitude, longitude, tags, notes. This records
+  user-authorized corrections; machine observations remain intact. Null resets a field
+  to machine evidence. `metadata-history` pages the audit history.
+- `coverage(result_id, condition?)` accounts for the entire frozen result scope,
+  including unknown/unanalyzed members. Review this before claiming exhaustive work.
+  `results` exposes root revisions, unavailable members and evidence-change indicators.
+- `review-detail` performs configured high-resolution/crop review. For visual hosts,
+  `photo_image` returns native MCP image content. Scoped unknown members can be inspected.
+- `group-read(group_spec_id, group?, limit, offset)` pages summaries or IDs in a named
+  group. `people`, `collection` and job listings also have bounded pages.
+- `recipe-save(name, rule?, result_id?, preference?, recipe_id?, expected_version?)`
+  remembers a rule/preference only when the user asks. Supply exactly one dynamic rule
+  or frozen result ID. `recipe-read` reads it; `recipe-materialize` explicitly reevaluates
+  a dynamic rule or returns the frozen snapshot. Editing requires its current version.
+
+An explicit selection stays an explicit selection after refinement; it does not become
+objective semantic truth. Capture a new result after corrections when new membership
+is desired. Existing snapshots never silently expand. Plans reject known offline roots,
+existing target paths and unsafe ancestors; execution checks again for intervening changes.

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0a3 — development candidate
+
+- Complete endpoint-wide admission, foreground priority, actual request reservations,
+  cached-stage reuse, Retry-After and configuration-bound atomic job commits.
+- Add JSON Schema validation/discovery, native MCP images and high-resolution provider review.
+- Add user metadata overlays, explicit date bases, format/size filters, paginated groups,
+  reusable rules/preferences and per-stage scope coverage.
+- Normalize embedded color profiles and transparency; preflight output conflicts and
+  offline sources; checkpoint scans before atomic catalog updates.
+- Add catalog migrations through v4, source/evidence revision reporting, independent-space
+  retrieval tests and reproducible quality/kernel evaluation tools.
+- Real-model quality, independent-agent acceptance and library-scale performance remain
+  separate acceptance gates; this candidate does not claim those measurements.
+
 ## 0.2.0a2 — unreleased
 
 - Split source into domain packages and separate unit/integration tests; enforce Ruff style in CI.

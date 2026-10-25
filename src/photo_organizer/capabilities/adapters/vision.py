@@ -8,6 +8,7 @@ from pathlib import Path
 
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.library.imaging import PREPROCESSING
 from photo_organizer.vision.provider import PROMPT, validate_label
 
 
@@ -30,7 +31,9 @@ class Vision:
         self.provider_id = config["protocol"]
         self.url = config["endpoint"]
         self.version = (
-            hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()[:24]
+            hashlib.sha256(
+                json.dumps([config, PREPROCESSING], sort_keys=True).encode()
+            ).hexdigest()[:24]
             + "-visual-v2"
         )
 

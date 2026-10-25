@@ -138,7 +138,10 @@ def _run(state, task_id):
                 previous_seconds,
             )
             with execution_context(
-                background=True, admission=admission.reserve, checkpoint=admission.checkpoint
+                background=True,
+                admission=admission.reserve,
+                checkpoint=admission.checkpoint,
+                commit=admission._check,
             ):
                 admission.checkpoint()
                 with writer_lock(Path(state) / "stage-locks" / stage):
@@ -146,8 +149,8 @@ def _run(state, task_id):
         except JobBoundary as boundary:
             with connect(state) as c:
                 c.execute(
-                    "UPDATE job_items SET status='pending' WHERE job_id=? AND item_id=?",
-                    (task_id, item["item_id"]),
+                    "UPDATE job_items SET status='pending',attempts=max(0,attempts-?) WHERE job_id=? AND item_id=?",
+                    (int(not admission.admitted), task_id, item["item_id"]),
                 )
                 c.execute(
                     "UPDATE jobs SET status=?,owner=NULL,error=?,progress=?,updated=? WHERE id=?",
@@ -206,6 +209,11 @@ def _run(state, task_id):
                     (json.dumps({"input": payload, "output": output}), task_id, item["item_id"]),
                 )
                 progress["completed"] = progress.get("completed", 0) + 1
+                for key, value in output.get("usage", {}).items():
+                    if type(value) in (int, float):
+                        progress.setdefault("usage", {})[key] = (
+                            progress.get("usage", {}).get(key, 0) + value
+                        )
             c.execute(
                 "UPDATE jobs SET progress=?,updated=? WHERE id=?",
                 (json.dumps(progress), now(), task_id),
@@ -215,6 +223,7 @@ def _run(state, task_id):
             delay = max(2 ** (item["attempts"] + 1), error.get("retry_after") or 0)
             for _ in range(int(delay * 5) + 1):
                 time.sleep(0.2)
-                with connect(state) as c:
-                    if c.execute("SELECT control FROM jobs WHERE id=?", (task_id,)).fetchone()[0]:
-                        break
+                try:
+                    admission.checkpoint()
+                except JobBoundary:
+                    break

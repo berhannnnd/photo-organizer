@@ -35,6 +35,7 @@ def prepare(path, state):
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with Image.open(io.BytesIO(data)) as im:
                 im.load()
+                image_format = im.format
                 exif = im.getexif()
                 try:
                     detail = exif.get_ifd(34665)
@@ -85,6 +86,7 @@ def prepare(path, state):
             "size": before.st_size,
             "mtime_ns": before.st_mtime_ns,
             "width": width,
+            "format": image_format,
             "height": height,
             "taken": taken,
             "derivative": str(target),
@@ -141,7 +143,7 @@ def scan(state, root, workers=4, verify=False):
         previous = {
             r["path"]: r
             for r in c.execute(
-                "SELECT f.*,a.prep_version,a.derivative FROM files f LEFT JOIN assets a ON f.hash=a.hash WHERE root=?",
+                "SELECT f.*,a.prep_version,a.derivative,a.format FROM files f LEFT JOIN assets a ON f.hash=a.hash WHERE root=?",
                 (str(root),),
             )
         }
@@ -160,6 +162,7 @@ def scan(state, root, workers=4, verify=False):
                 and not old["error"]
                 and old["size"] == s.st_size
                 and old["mtime_ns"] == s.st_mtime_ns
+                and old["format"]
                 and old["prep_version"] == PREP
                 and old["derivative"]
                 and Path(old["derivative"]).is_file()
@@ -203,11 +206,12 @@ def scan(state, root, workers=4, verify=False):
                     ),
                 )
                 c.execute(
-                    "UPDATE assets SET latitude=?,longitude=?,timezone=? WHERE hash=?",
+                    "UPDATE assets SET latitude=?,longitude=?,timezone=?,format=? WHERE hash=?",
                     (
                         result["latitude"],
                         result["longitude"],
                         result["timezone"],
+                        result["format"],
                         result["hash"],
                     ),
                 )

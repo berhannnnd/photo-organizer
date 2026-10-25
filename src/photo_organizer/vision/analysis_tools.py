@@ -12,7 +12,8 @@ from PIL import Image, ImageFilter, ImageStat
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.capabilities.registry import get_config, vision
 from photo_organizer.core.errors import CapabilityError
-from photo_organizer.runtime.context import admit, checkpoint
+from photo_organizer.library.imaging import PREPROCESSING
+from photo_organizer.runtime.context import admit, checkpoint, commit_guard
 from photo_organizer.search.selection import context, members, now, retrieval_context, save
 from photo_organizer.storage.catalog import connect
 
@@ -153,13 +154,13 @@ def analyze_one(state, row, kind):
     if not asset:
         raise ValueError("missing content")
     if kind == "quality":
-        version = "quality-v1"
+        version = "quality-v1-" + PREPROCESSING
         source = {"kind": "local", "model": "pillow-measurements"}
     elif kind == "ocr":
         config = get_config(state, "ocr")
         import hashlib
 
-        dependencies = {"ocr": config}
+        dependencies = {"ocr": config, "preprocessing": PREPROCESSING}
         if config["protocol"] == "vision":
             dependencies["vision"] = get_config(state, "vision")
         version = hashlib.sha256(json.dumps(dependencies, sort_keys=True).encode()).hexdigest()
@@ -180,6 +181,7 @@ def analyze_one(state, row, kind):
         output = ocr_image(state, asset["derivative"], config)
     checkpoint()
     with connect(state) as c:
+        commit_guard(c)
         c.execute(
             "INSERT INTO observations VALUES(?,?,?,?,?,?,?)",
             (

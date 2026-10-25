@@ -50,6 +50,18 @@ CONFIG = obj(
 )
 RULE = obj(
     {
+        "formats": array(STRING, 20, 1),
+        **{
+            name: {"type": "integer", "minimum": 0}
+            for name in (
+                "min_width",
+                "max_width",
+                "min_height",
+                "max_height",
+                "min_bytes",
+                "max_bytes",
+            )
+        },
         "and": array({"$ref": "#/$defs/rule"}, 50, 1),
         "or": array({"$ref": "#/$defs/rule"}, 50, 1),
         "not": {"$ref": "#/$defs/rule"},
@@ -89,6 +101,7 @@ PLAN = obj(
         "levels": array(LEVEL, 8, 1),
         "overlap": {"type": "string", "enum": ["error", "first", "multi"]},
         "name_template": STRING,
+        "date_basis": {"type": "string", "enum": ["capture", "import", "modified"]},
         "quality": {"type": "integer", "minimum": 1, "maximum": 95},
         "long_edge": {"type": "integer", "minimum": 64, "maximum": 8192},
         "max_bytes": {"type": "integer", "minimum": 1024},
@@ -162,7 +175,7 @@ ENUMS = {
     "method": ["theme", "event", "person", "duplicates", "similar"],
 }
 STRINGS = set(
-    "operation role task_id result_id result_set_id parent_id group_spec_id collection_id plan_id person_id target verdict version overlap space_id text query model revision space endpoint condition expected_version reason name group root name_template metric method identity field ranking mode action protocol".split()
+    "operation role task_id result_id result_set_id parent_id group_spec_id collection_id plan_id recipe_id preference person_id target verdict version overlap space_id text query model revision space endpoint condition expected_version reason name group root name_template metric method identity field ranking mode action protocol".split()
 )
 INTS = {
     "file_id",
@@ -190,6 +203,13 @@ BOOLS = {
 
 def argument_schema(operation, parameter):
     name = parameter["name"]
+    if name == "expected_version" and operation == "recipe-save":
+        return {
+            "type": ["integer", "null"],
+            "minimum": 1,
+            "default": None,
+            "description": "Prior recipe version required for updates",
+        }
     if name == "rule":
         schema = {"$ref": "#/$defs/rule"}
     elif name == "spec":

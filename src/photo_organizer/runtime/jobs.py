@@ -18,14 +18,19 @@ def status(state, task_id=None, limit=50, offset=0):
         raise ValueError("invalid pagination")
     with connect(state) as c:
         if task_id is None:
+            total = c.execute("SELECT count(*) FROM jobs").fetchone()[0]
             return {
+                "total": total,
+                "offset": offset,
+                "limit": limit,
+                "next_offset": offset + limit if offset + limit < total else None,
                 "tasks": [
                     dict(r)
                     for r in c.execute(
                         "SELECT id,operation,status,created,updated FROM jobs ORDER BY created DESC LIMIT ? OFFSET ?",
                         (limit, offset),
                     )
-                ]
+                ],
             }
         row = c.execute("SELECT * FROM jobs WHERE id=?", (task_id,)).fetchone()
         if not row:

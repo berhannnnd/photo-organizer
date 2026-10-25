@@ -134,3 +134,112 @@ class SchedulingTests(unittest.TestCase):
         self.assertEqual(status["progress"]["images"], 1)
         self.assertEqual(status["progress"]["requests"], 2)
         self.assertEqual(status["status"], "needs_input")
+
+    def test_scan_control_during_preprocessing_preserves_committed_catalog(self):
+        from photo_organizer.library import ingest
+        from photo_organizer.storage.catalog import connect
+
+        entered, release = threading.Event(), threading.Event()
+        original = ingest.prepare
+
+        def prepare(*args):
+            entered.set()
+            release.wait(4)
+            return original(*args)
+
+        task = jobs.start(
+            self.state, "scan", {"root": str(self.root), "verify": True}, background=False
+        )["task_id"]
+        with patch.object(ingest, "prepare", prepare):
+            thread = threading.Thread(target=jobs.run, args=(self.state, task))
+            thread.start()
+            try:
+                self.assertTrue(entered.wait(2))
+                started = time.monotonic()
+                jobs.control(self.state, task, "pause")
+                self.assertLess(time.monotonic() - started, 1)
+            finally:
+                release.set()
+                thread.join(5)
+        self.assertEqual(jobs.status(self.state, task)["status"], "paused")
+        with connect(self.state) as c:
+            self.assertEqual(
+                c.execute("SELECT count(*) FROM files WHERE present=1").fetchone()[0], 3
+            )
+
+    def test_crash_recovery_preserves_reservations(self):
+        import json
+
+        from photo_organizer.storage.catalog import connect
+
+        task = jobs.start(
+            self.state, "quality", {"result_id": self.r["result_set_id"]}, background=False
+        )["task_id"]
+        with connect(self.state) as c:
+            c.execute(
+                "UPDATE jobs SET status='running',owner='dead',progress=? WHERE id=?",
+                (json.dumps({"completed": 0, "requests": 2, "images": 1, "seconds": 3}), task),
+            )
+            c.execute(
+                "UPDATE job_items SET status='running',charged=1,attempts=1 WHERE job_id=? AND item_id=(SELECT min(item_id) FROM job_items WHERE job_id=?)",
+                (task, task),
+            )
+        jobs.recover(self.state, task)
+        with patch.object(jobs, "launch"):
+            jobs.control(self.state, task, "resume")
+        jobs.run(self.state, task)
+        status = jobs.status(self.state, task)
+        self.assertEqual(status["status"], "completed")
+        self.assertEqual(status["progress"]["requests"], 2)
+        self.assertEqual(status["progress"]["images"], 3)
+
+    def test_late_model_result_cannot_overwrite_after_reconfiguration(self):
+        from photo_organizer.storage.catalog import connect
+
+        initial = {
+            "protocol": "openai",
+            "endpoint": "https://example.test/vision",
+            "model": "before",
+        }
+        configure(self.state, "vision", initial)
+        task = jobs.start(
+            self.state, "index", {"result_id": self.r["result_set_id"]}, background=False
+        )["task_id"]
+        state = self.state
+
+        class Provider:
+            version = "before"
+            model = "before"
+
+            def label(self, path):
+                admit(True)
+                configure(state, "vision", {**initial, "model": "after"})
+                return {"caption": "obsolete", "category": "object", "tags": ["red"]}, {"usage": {}}
+
+        with (
+            patch("photo_organizer.runtime.job_actions.vision", return_value=Provider()),
+            patch("photo_organizer.runtime.job_actions.checkpoint"),
+        ):
+            jobs.run(self.state, task)
+        status = jobs.status(self.state, task)
+        self.assertEqual(status["status"], "needs_input")
+        self.assertEqual(status["error"]["code"], "version_conflict")
+        with connect(self.state) as c:
+            self.assertEqual(
+                c.execute("SELECT count(*) FROM assets WHERE caption='obsolete'").fetchone()[0], 0
+            )
+
+    def test_shared_endpoint_respects_stricter_active_role(self):
+        config = {"endpoint": "https://test/" + tempfile.mktemp(), "concurrency": 1}
+        entered = threading.Event()
+
+        def attempt():
+            with provider_slot({**config, "concurrency": 8}):
+                entered.set()
+
+        with provider_slot(config):
+            thread = threading.Thread(target=attempt)
+            thread.start()
+            self.assertFalse(entered.wait(0.2))
+        thread.join(3)
+        self.assertTrue(entered.is_set())

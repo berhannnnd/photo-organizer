@@ -35,6 +35,9 @@ for operation discovery and examples; use the same library state across turns.
   according to user intent. Plan with the whole selected result ID, inspect actions,
   counts, target and conflicts, then apply within existing authorization. Do not ask
   again for the same authorized action. Originals remain unchanged.
+- Save cross-task preferences only when the user explicitly asks to remember them,
+  using versioned recipes. Dynamic recipes refresh explicitly; keep frozen selections
+  stable. Use the coverage ledger for complete-scope claims.
 - For larger work use durable jobs with scope and budgets. Report `needs_input`,
   partial failures and in-flight control boundaries. Resume preserved progress;
   inspect execution receipts before retrying. A collection can be selected again.

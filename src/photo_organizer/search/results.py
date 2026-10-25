@@ -198,6 +198,13 @@ def page(state, result_id, limit=50, offset=0, verdict=None):
                 (result_id,),
             ).fetchone()[0],
             "model_calls": 0,
+            "source_revisions": [
+                dict(r)
+                for r in c.execute(
+                    "SELECT DISTINCT rt.id,rt.path,rt.status,rt.revision,rt.last_success FROM result_members m JOIN files f ON f.id=m.file_id JOIN roots rt ON rt.path=f.root WHERE m.result_id=? ORDER BY rt.id LIMIT 1000",
+                    (result_id,),
+                )
+            ],
             "freshness": "relative_to_last_scan; run scan before operations requiring current files",
         }
 

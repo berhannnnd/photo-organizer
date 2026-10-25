@@ -129,3 +129,42 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(converted.getpixel((0, 0)), (255, 0, 0))
         transparent = Image.new("RGBA", (3, 3), (0, 0, 0, 0))
         self.assertEqual(normalized(transparent).getpixel((0, 0)), (255, 255, 255))
+
+    def test_dynamic_recipe_is_explicit_and_snapshot_does_not_expand(self):
+        from photo_organizer.library import recipes
+
+        dynamic = recipes.save(
+            self.state,
+            "landscapes",
+            rule={"orientation": "landscape"},
+            preference="Prefer bright images",
+        )
+        fixed = recipes.save(self.state, "chosen", result_id=self.all["result_set_id"])
+        Image.new("RGB", (50, 25), "blue").save(self.root / "new.jpg")
+        lifecycle.synchronize(self.state, str(self.root))
+        self.assertEqual(recipes.materialize(self.state, dynamic["recipe_id"])["total"], 4)
+        self.assertEqual(recipes.materialize(self.state, fixed["recipe_id"])["total"], 3)
+        with self.assertRaisesRegex(ValueError, "version"):
+            recipes.save(self.state, "edited", rule={}, recipe_id=dynamic["recipe_id"])
+        changed = recipes.save(
+            self.state, "edited", rule={}, recipe_id=dynamic["recipe_id"], expected_version=1
+        )
+        self.assertEqual(changed["version"], 2)
+
+    def test_coverage_includes_unanalyzed_scope_and_metadata_snapshot_changes(self):
+        from photo_organizer.search.coverage import inspect
+
+        unknown = results.create(self.state, {"semantic": "cat"})
+        report = inspect(self.state, unknown["result_set_id"], "cat")
+        self.assertEqual(report["scope_files"], 3)
+        self.assertEqual(report["criterion_verdicts"], {"unanalyzed": 3})
+        row = self.all["items"][0]
+        annotations.correct(
+            self.state,
+            self.all["result_set_id"],
+            [{"file_id": row["id"], "hash": row["hash"], "changes": {"category": "family"}}],
+        )
+        page = results.page(self.state, self.all["result_set_id"])
+        item = next(r for r in page["items"] if r["id"] == row["id"])
+        self.assertTrue(item["evidence_changed"])
+        self.assertIsNone(item["snapshot_evidence"]["category"])

@@ -1,62 +1,59 @@
 # Delivery and release evidence
 
-Date: 2026-10-25. Target: PRD v0.7, portable Skill for tool-capable agents,
-including text-only hosts with separately configured visual services. This document
-separates implementation from acceptance; it does not reduce the PRD scope.
+Date: 2026-10-25. Development target: PRD v0.7. Candidate: 0.2.0a3.
+The portable Skill and engine implementation is ready for user integration testing.
+This is an alpha development delivery, not a completed model-quality or community
+release acceptance. No model downloads or real-library inference were performed in
+this development batch.
 
-## Implemented development baseline
+## Implementation traceability
 
-- Domain packages for storage, library, search, vision, capability adapters,
-  organization, runtime and transports; thin compatibility entrypoints.
-- Versioned catalog migration, registered root scans, rename identity, offline/partial
-  scan handling, opt-in polling and derivative retention.
-- Immutable results, explicit selection/ranking, set operations, scoped refinement,
-  unknown/unanalyzed distinction, user semantic corrections and host evidence.
-- Image/text and description vector spaces, host vector submission, reference-image
-  retrieval, channel coverage and reciprocal-rank fusion with explicit text fallback.
-- Role configuration and real-input probes for vision, embedding, OCR and faces;
-  optional local engines and host submissions do not require host-native vision.
-- Automatic grouping suggestions, editable nested groups, naming, overlap policies,
-  collections, bounded compression, non-destructive export and action receipts.
-- Durable job items, detached worker, pause/cancel/recovery, configuration revisions,
-  retry limits and conservative request/image/time/cost bounds.
-- CLI and MCP share operations and argument discovery; packaged Skill describes
-  the actual workflow. Ruff formatting/lint and wheel/sdist builds are configured.
+| PRD contract | Implementation | Development evidence |
+| --- | --- | --- |
+| 3.1 portable Skill and text-only hosts | Shared CLI/MCP service, JSON Schema discovery/validation, native MCP image, external vision/OCR/vector/face roles | Real stdio workflow, schema and HTTP fixtures |
+| 4.E–G free composition and refinement | Immutable results, explicit selections, ordering, set algebra, lineage, recipes and editable preferences | Composition, scope, dynamic-vs-frozen and stale-selection tests |
+| 5.1–5.4 indexing and retrieval | Metadata, image/description spaces, OCR/text, vector/reference search, RRF, coverage ledger | Separate-space/partial-coverage/caching tests; no quality claim |
+| 5.5–5.9 configuration | Per-role adapters, real-input probes, credential references, host submission, explicit fallback and detail escalation | Loopback modality/auth/rate/error tests; real vendors require acceptance |
+| 5.10 lifecycle | Migrations, stable rename identity, offline roots, atomic scan commit, scan checkpoints, source-change rejection, watcher and retention | Offline/partial-scan/interruption/recovery tests |
+| 5.11 evidence and corrections | Unknown/unanalyzed states, exact-criterion evidence, frozen evidence metadata, scoped corrections, user metadata overlay | Boolean, evidence lineage and correction tests |
+| 6/6.1 deterministic organization | Nested editable groups, overlap policy, naming, date basis, collision preflight, receipts and reusable collections | Filesystem, export, grouping, pagination and no-clobber tests |
+| 7 preprocessing | Decoded format, EXIF orientation, ICC-to-sRGB, transparency, bounded detail crops and validated JPEG output | Color/alpha/crop/export tests |
+| 8.1 durable runtime | Cross-process provider slots, interactive priority, cache-aware reservations, missing-role binding, pause/cancel/recover, Retry-After, late-result guard | Multiprocess admission, controls, retries, crash reservation and configuration-race tests |
+| 9 evaluation support | Full-scope truth scorer, per-group metrics/gates, cached-kernel timing, host trace harness | Scoring regression tests; actual acceptance measurements pending |
 
-## Current validation
+## Verification
 
-The current regression suite has 47 tests. It exercises real stdio MCP, a loopback
-HTTP provider fixture, detached worker execution, snapshot composition, host vectors,
-retrieval lineage, stale selection rejection, filesystem export and scan lifecycle.
-Ruff lint and formatting checks pass. Wheel and source archive build successfully.
-The wheel installed in a fresh virtual environment outside the checkout; all 47 tests
-passed there too, and the bundled Skill was present. Skill validation also passed.
-These are deterministic engineering checks, not evidence of real model accuracy.
+- 66 local regression tests pass, including real MCP image/stdio transport, loopback
+  HTTP and cross-process workers. Ruff lint/format and Skill validation pass.
+- Wheel and source archive build successfully. The wheel installs outside the checkout
+  in a fresh virtual environment, includes the Skill, and passes the same 66 tests.
+  `benchmarks/results/package-smoke.json` records the isolated installation output.
+- Linux/macOS × Python 3.11/3.13 passed remotely for implementation commit `61ba8f4`.
+  Later candidate commits must have their own CI results; an earlier pass does not
+  certify a changed revision.
+- Deterministic fixtures establish engineering behavior. They do not establish semantic
+  recall, Chinese model quality, face identity accuracy or user preference satisfaction.
 
-Earlier local metadata latency measurements and catalog counts belong to an older
-baseline and are not presented as current acceptance evidence. The benchmark tools
-remain available for explicit model/collection testing.
+## User and release acceptance remaining
 
-## Open engineering audit
+- Configure the actual intended endpoints/models and run the nine PRD capability
+  scenarios, including a text-only host and mixed providers.
+- Run the same task chains through two independent agent hosts, restart/resume and
+  missing-capability recovery. The SDK integration client is not a second host.
+- Collect independent full-scope labels and execute the held-out quality protocol,
+  face-specific dataset and subjective user review. See [EVALUATION.md](EVALUATION.md).
+- Measure the real library, model/hardware latency, background contention, complete-scope
+  accounting and file throughput; 10,000-photo support remains unmeasured.
 
-Before claiming the entire PRD implemented, close the following boundaries:
+These acceptance items require actual host/model/data evidence and are not open promises
+of unimplemented endpoints. Any failures found in acceptance must be fixed before a
+release claim.
 
-- Cross-job provider concurrency and interactive priority; cache-aware request budgets,
-  durable binding of initially missing capabilities and Retry-After handling.
-- Full typed operation schemas and bounded paging for every group/identity/collection
-  response; configurable metadata corrections beyond semantic judgments.
-- Result evidence freshness/coverage across every stage, offline snapshot planning,
-  output collision reporting at plan time and color-profile normalization.
-- Full regression coverage for separate description spaces, provider response failures,
-  interrupted scans, nested root ownership and crash/control races.
+## Explicit product limits
 
-## Acceptance still required
-
-- Independent agent hosts through CLI and MCP; an SDK test client is not another host.
-- Actual configured OCR/vision/embedding/face model checks, human-labeled held-out
-  quality benchmark, complete-scope semantic coverage and library-scale load tests.
-- Remote Linux/macOS CI results and supported-platform clean-environment installation.
-- Final PRD traceability review before community release. Windows remains unsupported.
-
-Do not treat a supported adapter, successful protocol probe or implemented operation
-as a guarantee of semantic quality, exhaustive recall or completed release acceptance.
+POSIX only (Linux/macOS); Windows is unsupported. No original-file move/delete, automatic
+file rollback, arbitrary provider protocol compatibility, RAW/Live Photo completeness,
+cloud-drive adapter or display UI is claimed. These follow the PRD's scope boundary.
+Provider queue priority is local admission, not preemption of a vendor's in-flight work.
+Monetary bounds use the caller's conservative per-request estimate, not an exact bill.
+A dynamic recipe is refreshed explicitly, never silently substituted for a frozen result.

@@ -32,6 +32,7 @@ def plan(state, spec, target=None, mode="album"):
         "group_spec_id",
         "name_template",
         "max_bytes",
+        "date_basis",
     }:
         raise ValueError("invalid plan spec")
     if mode == "compress":
@@ -46,6 +47,9 @@ def plan(state, spec, target=None, mode="album"):
         mode != "compress" or type(spec["max_bytes"]) is not int or spec["max_bytes"] < 1024
     ):
         raise ValueError("max_bytes requires compress and at least 1024 bytes")
+    date_basis = spec.get("date_basis", "capture")
+    if date_basis not in ("capture", "import", "modified"):
+        raise ValueError("invalid date_basis")
     with writer_lock(state), connect(state) as c:
         if mode != "album":
             if not target:
@@ -65,6 +69,21 @@ def plan(state, spec, target=None, mode="album"):
             items = select_snapshot(c, spec["result_set_id"], spec.get("accept_candidates") is True)
         else:
             items = select(c, spec.get("filter", {}))
+        if date_basis != "capture":
+            date_column = (
+                "imported_at"
+                if date_basis == "import"
+                else "datetime(mtime_ns/1000000000,'unixepoch')"
+            )
+            items = [
+                {
+                    **dict(row),
+                    "taken": c.execute(
+                        "SELECT " + date_column + " FROM files WHERE id=?", (row["id"],)
+                    ).fetchone()[0],
+                }
+                for row in items
+            ]
         from photo_organizer.organizing.organization import filename, group_paths
 
         if spec.get("group_spec_id") and any(k in spec for k in ("levels", "group_by", "groups")):
@@ -79,6 +98,7 @@ def plan(state, spec, target=None, mode="album"):
         actions = []
         counts = {}
         destinations = set()
+        estimated_bytes = 0
         for sequence, row in enumerate(items, 1):
             for group in (
                 assigned.get(row["id"], ["unclassified"])
@@ -86,6 +106,9 @@ def plan(state, spec, target=None, mode="album"):
                 else paths(row, levels)
             ):
                 counts[group] = counts.get(group, 0) + 1
+                estimated_bytes += c.execute(
+                    "SELECT COALESCE(size,0) FROM files WHERE id=?", (row["id"],)
+                ).fetchone()[0]
                 suffix = ".jpg" if mode == "compress" else Path(row["path"]).suffix.lower()
                 if not suffix or len(suffix) > 12 or not suffix[1:].isalnum():
                     suffix = ".image"
@@ -131,6 +154,8 @@ def plan(state, spec, target=None, mode="album"):
             "plan_id": plan_id,
             "selected": len(items),
             "memberships": len(actions),
+            "estimated_source_bytes": estimated_bytes,
+            "output_size_note": "copy preserves bytes; compression size is measured during execution",
             "groups": counts,
             "library": report(c),
             "mode": mode,

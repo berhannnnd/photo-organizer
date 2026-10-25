@@ -1,13 +1,17 @@
 """Operation registration only; implementations live in focused domain modules."""
 
 from photo_organizer.capabilities import registry as capabilities
-from photo_organizer.library import annotations, lifecycle
+from photo_organizer.library import annotations, lifecycle, recipes
 from photo_organizer.organizing import discovery, organization
 from photo_organizer.runtime import jobs
 from photo_organizer.search import coverage, retrieval, selection
-from photo_organizer.vision import analysis_tools, evidence, people
+from photo_organizer.vision import analysis_tools, detail_review, evidence, people
 
 OPERATIONS = {
+    "review-detail": detail_review.review,
+    "recipe-save": recipes.save,
+    "recipe-read": recipes.read,
+    "recipe-materialize": recipes.materialize,
     "coverage": coverage.inspect,
     "metadata-correct": annotations.correct,
     "metadata-history": annotations.history,

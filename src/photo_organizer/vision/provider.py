@@ -12,7 +12,9 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-PROMPT_VERSION = "photo-facts-v1"
+from photo_organizer.library.imaging import PREPROCESSING
+
+PROMPT_VERSION = "photo-facts-v1-" + PREPROCESSING
 CATEGORIES = [
     "animal",
     "landscape",

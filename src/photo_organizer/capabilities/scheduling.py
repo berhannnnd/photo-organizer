@@ -33,6 +33,35 @@ def _waiting(root):
     return False
 
 
+def _available_slot(root, requested_limit):
+    free = []
+    active_limits = []
+    try:
+        for index in range(8):
+            candidate = (root / ("slot-" + str(index))).open("a+")
+            if _lock(candidate):
+                free.append(candidate)
+            else:
+                candidate.seek(0)
+                try:
+                    active_limits.append(max(1, min(8, int(candidate.read()))))
+                except ValueError:
+                    active_limits.append(1)
+                candidate.close()
+        effective = min([requested_limit, *active_limits])
+        if len(active_limits) >= effective or not free:
+            return None
+        slot = free.pop(0)
+        slot.seek(0)
+        slot.truncate()
+        slot.write(str(requested_limit))
+        slot.flush()
+        return slot
+    finally:
+        for file in free:
+            file.close()
+
+
 @contextmanager
 def provider_slot(config):
     # Endpoint-wide: separate roles sharing a service also share its capacity.
@@ -56,12 +85,7 @@ def provider_slot(config):
                 fcntl.flock(mutex, fcntl.LOCK_EX)
                 try:
                     if not background() or not _waiting(root):
-                        for index in range(limit):
-                            candidate = (root / ("slot-" + str(index))).open("a+")
-                            if _lock(candidate):
-                                slot = candidate
-                                break
-                            candidate.close()
+                        slot = _available_slot(root, limit)
                     if slot is not None and ticket is not None:
                         ticket_path.unlink(missing_ok=True)
                         ticket.close()

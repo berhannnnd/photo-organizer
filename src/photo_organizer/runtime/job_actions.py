@@ -4,7 +4,7 @@ import base64
 import json
 
 from photo_organizer.capabilities.registry import get_config, vision
-from photo_organizer.runtime.context import checkpoint
+from photo_organizer.runtime.context import checkpoint, commit_guard
 from photo_organizer.storage.catalog import connect
 
 
@@ -60,6 +60,7 @@ def execute(state, operation, spec, row):
         )
         checkpoint()
         with connect(state) as c:
+            commit_guard(c)
             register(c, encoder, blob)
             c.execute(
                 "INSERT OR REPLACE INTO image_vectors VALUES(?,?,?)",
@@ -77,6 +78,7 @@ def execute(state, operation, spec, row):
         from photo_organizer.search.selection import now
 
         with connect(state) as c:
+            commit_guard(c)
             c.execute(
                 "UPDATE assets SET caption=?,category=?,vision_state='complete',vision_version=?,vision_error=NULL WHERE hash=?",
                 (label["caption"], label["category"], provider.version, row["hash"]),
@@ -113,6 +115,7 @@ def execute(state, operation, spec, row):
         obj, metrics = provider.judge(asset["derivative"], spec["condition"])
         checkpoint()
         with connect(state) as c:
+            commit_guard(c)
             c.execute(
                 "INSERT INTO conditions VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version",
                 (key, spec["condition"], version),

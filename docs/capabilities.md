@@ -96,3 +96,29 @@ opt-in polling reconciler; `stop` disables it. This is not instantaneous event d
 Offline roots retain their indexes and old snapshots; ordinary searches exclude them.
 `cache-cleanup` defaults to dry-run and retains original photos, referenced results and
 plans. Unreferenced derivatives get a retention window before removal.
+
+## Admission, accounting and detail escalation
+
+Roles sharing an endpoint share cross-process provider slots; the strictest active
+role limit applies. Waiting foreground calls take precedence over new background
+calls. Already-running requests are not interrupted and vendor queues remain external.
+Slots are released on process exit. Use consistent endpoint URLs for the same service.
+
+Model request budgets count actual POST reservations, not cache hits or local discovery
+GETs. Local OCR/quality/face computation consumes image work but no remote request count.
+Retries preserve reservations, including uncertain timeout billing; rebind preserves
+cumulative spending. Server Retry-After is observed with interruptible waits. Time caps
+stop future dispatch; an in-flight overrun is reported. A capability missing at task
+creation is explicitly bound as missing and requires rebind after configuration.
+
+`review-detail(result_id, file_id, condition, long_edge=2560, crop=null)` lets a text-only
+host request higher-resolution review through its configured vision service. Crop
+coordinates are original oriented pixels; partial context is disclosed to the model.
+Use whole-image review for global absence/count conditions. `photo_image` returns a
+native MCP image for visual hosts; `call image` retains the base64 JSON contract.
+
+`capability-status` reports the last verification result, not current reachability.
+A successful probe is neither model-quality acceptance nor proof of immutable remote
+model weights. Prefer explicit revisions; services that mutate a named model need a
+configuration revision change and reindexing. Preprocessing versions are included in
+visual/OCR/face/vector cache identities.

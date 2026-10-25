@@ -34,6 +34,18 @@ class CapabilityTests(unittest.TestCase):
 
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                if self.path == "/rate":
+                    self.send_response(429)
+                    self.send_header("Retry-After", "7")
+                    self.end_headers()
+                    return
+                if self.path == "/invalid":
+                    encoded = b"[]"
+                    self.send_response(200)
+                    self.send_header("Content-Length", str(len(encoded)))
+                    self.end_headers()
+                    self.wfile.write(encoded)
+                    return
                 if self.path == "/fail":
                     self.send_response(401)
                     self.end_headers()
@@ -66,6 +78,18 @@ class CapabilityTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join()
         self.tmp.cleanup()
+
+    def test_rate_limit_hint_and_malformed_json_shape(self):
+        from photo_organizer.capabilities.adapters.http import request
+        from photo_organizer.core.errors import CapabilityError
+
+        with self.assertRaises(CapabilityError) as raised:
+            request({"endpoint": self.url + "/rate", "protocol": "photo-http"}, {})
+        self.assertTrue(raised.exception.retryable)
+        self.assertEqual(raised.exception.retry_after, 7)
+        with self.assertRaises(CapabilityError) as raised:
+            request({"endpoint": self.url + "/invalid", "protocol": "photo-http"}, {})
+        self.assertEqual(raised.exception.code, "invalid_response")
 
     def test_real_protocol_probe_and_role_isolation(self):
         capabilities.configure(

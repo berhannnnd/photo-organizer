@@ -85,3 +85,63 @@ class RetrievalTests(unittest.TestCase):
             c.execute("UPDATE files SET present=0 WHERE id=?", (self.ids[0],))
         with self.assertRaises(ValueError):
             selection.choose(self.state, r["result_set_id"], [self.ids[0]], verdicts=["unanalyzed"])
+
+    def test_independent_description_space_and_partial_coverage(self):
+        import hashlib
+
+        from photo_organizer.search.embeddings import initialize, pack, register
+        from photo_organizer.storage.catalog import connect
+
+        class Provider:
+            model = "test"
+            digest = "1"
+            endpoint = "local"
+
+            def __init__(self, role):
+                self.space = role
+
+            def encode(self, text):
+                return pack([1, 0] if self.space == "image_text" else [1, 0, 0])
+
+        with connect(self.state) as c:
+            initialize(c)
+            c.execute(
+                "INSERT INTO capability_configs VALUES('description_text','{}','v','available',NULL,'now')"
+            )
+            register(c, Provider("image_text"), pack([1, 0]))
+            register(c, Provider("description_text"), pack([1, 0, 0]))
+            first, second = self.all["items"][:2]
+            c.execute(
+                "INSERT INTO image_vectors VALUES(?,?,?)",
+                ("image_text", first["hash"], pack([1, 0])),
+            )
+            c.execute(
+                "UPDATE assets SET caption='cat portrait',vision_state='complete',vision_version='v1' WHERE hash=?",
+                (second["hash"],),
+            )
+            c.execute(
+                "INSERT INTO description_vectors VALUES(?,?,?,?,?)",
+                (
+                    "description_text",
+                    second["hash"],
+                    "v1",
+                    hashlib.sha256(b"cat portrait").hexdigest(),
+                    pack([1, 0, 0]),
+                ),
+            )
+        with patch.object(
+            retrieval,
+            "provider_for",
+            side_effect=lambda state, model, endpoint, role: Provider(role),
+        ):
+            result = retrieval.search(self.state, "cat", top_k=3)
+            self.assertEqual(
+                result["channel_coverage"], {"image": 1, "description": 1, "literal_text": 1}
+            )
+            self.assertEqual({r["id"] for r in result["items"]}, {first["id"], second["id"]})
+            self.assertEqual(retrieval.search(self.state, "cat")["model_calls"], 0)
+            with connect(self.state) as c:
+                c.execute("UPDATE assets SET vision_version='v2' WHERE hash=?", (second["hash"],))
+            self.assertEqual(
+                retrieval.search(self.state, "cat")["channel_coverage"]["description"], 0
+            )

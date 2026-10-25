@@ -67,3 +67,22 @@ publication before retrying. Polling has a separate singleton lock and is opt-in
 The supported integration surface is versioned JSON CLI/MCP, not private Python module
 paths. Legacy `python -m photo_organizer.cli` and `photo_organizer.mcp_server` remain
 thin forwarding entrypoints. New internal imports use domain package paths.
+
+## Additional contracts
+
+`interfaces/schemas.py` owns JSON Schema; registration remains in `operations.py`.
+`library/annotations.py` appends user corrections and an effective SQL view overlays
+machine metadata without destroying it. `library/recipes.py` persists user-authorized
+rules/preferences with optimistic revisions and explicit snapshot/dynamic semantics.
+`library/imaging.py` centralizes orientation, color and alpha processing.
+
+`runtime/context.py` exposes cooperative admission and commit hooks. Actual model POSTs
+reserve durable budget immediately before dispatch; cached results and discovery GETs
+do not consume model-request budget. Local computation reserves image work separately.
+`capabilities/scheduling.py` uses endpoint-wide OS locks, conservative limits across
+active roles, foreground waiting tickets and crash-safe slot release. Commit guards
+validate bound revisions in the same write transaction as observation persistence.
+
+`evaluation/` owns reusable metrics and kernel timing. `benchmarks/` contains executable
+protocol entrypoints and host scenarios. Evaluation artifacts are evidence, not engine
+configuration; independent human truth is never fabricated by a fixture.

@@ -5,6 +5,13 @@ import hashlib
 
 ALIASES = {"猫": "cat", "猫咪": "cat", "狗": "dog", "人": "person", "人物": "person"}
 FIELDS = {
+    "formats",
+    "min_width",
+    "max_width",
+    "min_height",
+    "max_height",
+    "min_bytes",
+    "max_bytes",
     "date_basis",
     "roots",
     "path_prefix",
@@ -143,6 +150,29 @@ def predicate(rule, depth=0):
             raise ValueError("location_box is [south,west,north,east], no antimeridian crossing")
         clauses.append("a.latitude BETWEEN ? AND ? AND a.longitude BETWEEN ? AND ?")
         args.extend([box[0], box[2], box[1], box[3]])
+    for field, column, operator in (
+        ("min_width", "a.width", ">="),
+        ("max_width", "a.width", "<="),
+        ("min_height", "a.height", ">="),
+        ("max_height", "a.height", "<="),
+        ("min_bytes", "f.size", ">="),
+        ("max_bytes", "f.size", "<="),
+    ):
+        if field in rule:
+            if type(rule[field]) is not int or rule[field] < 0:
+                raise ValueError("invalid " + field)
+            clauses.append(column + operator + "?")
+            args.append(rule[field])
+    if "formats" in rule:
+        values = rule["formats"]
+        if (
+            not isinstance(values, list)
+            or not 1 <= len(values) <= 20
+            or any(not isinstance(v, str) or not v.isalnum() for v in values)
+        ):
+            raise ValueError("invalid formats")
+        clauses.append("a.format IN (" + ",".join("?" for _ in values) + ")")
+        args.extend(v.upper() for v in values)
     if "orientation" in rule:
         op = {"landscape": ">", "portrait": "<", "square": "="}.get(rule["orientation"])
         if not op:

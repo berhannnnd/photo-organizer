@@ -2,7 +2,7 @@
 
 import datetime
 
-VERSION = 3
+VERSION = 4
 DDL = """
 CREATE TABLE roots(id INTEGER PRIMARY KEY,path TEXT UNIQUE NOT NULL,status TEXT NOT NULL DEFAULT 'online',last_scan TEXT,last_success TEXT,revision INTEGER DEFAULT 0,error TEXT,enabled INTEGER DEFAULT 1);
 CREATE TABLE scans(id TEXT PRIMARY KEY,root_id INTEGER,started TEXT,finished TEXT,status TEXT,error TEXT);
@@ -53,32 +53,39 @@ def migrate(c):
             c.execute("ALTER TABLE job_items ADD COLUMN charged INTEGER NOT NULL DEFAULT 0")
             c.execute("PRAGMA user_version=2")
         if c.execute("PRAGMA user_version").fetchone()[0] < 3:
-            fields = {"taken", "category", "caption", "latitude", "longitude"}
-            columns = []
-            for row in c.execute("PRAGMA table_info(assets)"):
-                name = row[1]
-                original = 'a."' + name + '"'
-                if name in fields:
-                    value = (
-                        "(SELECT json_extract(value,'$') FROM corrections WHERE hash=a.hash AND field='"
-                        + name
-                        + "' AND scope_id='' ORDER BY created DESC,id DESC LIMIT 1)"
-                    )
-                    columns.append("COALESCE(" + value + "," + original + ") AS " + name)
-                else:
-                    columns.append(original)
-            for field in ("category", "caption"):
-                columns.append(
-                    "(SELECT json_extract(value,'$') IS NOT NULL FROM corrections WHERE hash=a.hash AND field='"
-                    + field
-                    + "' AND scope_id='' ORDER BY created DESC,id DESC LIMIT 1) AS user_"
-                    + field
-                )
-            c.execute(
-                "CREATE VIEW effective_assets AS SELECT " + ",".join(columns) + " FROM assets a"
-            )
+            effective_view(c)
             c.execute("PRAGMA user_version=3")
+        if c.execute("PRAGMA user_version").fetchone()[0] < 4:
+            c.execute("ALTER TABLE assets ADD COLUMN format TEXT")
+            c.execute("DROP VIEW effective_assets")
+            effective_view(c)
+            c.execute("PRAGMA user_version=4")
         c.commit()
     except Exception:
         c.rollback()
         raise
+
+
+def effective_view(c):
+    fields = {"taken", "category", "caption", "latitude", "longitude"}
+    columns = []
+    for row in c.execute("PRAGMA table_info(assets)"):
+        name = row[1]
+        original = 'a."' + name + '"'
+        if name in fields:
+            value = (
+                "(SELECT json_extract(value,'$') FROM corrections WHERE hash=a.hash AND field='"
+                + name
+                + "' AND scope_id='' ORDER BY created DESC,id DESC LIMIT 1)"
+            )
+            columns.append("COALESCE(" + value + "," + original + ") AS " + name)
+        else:
+            columns.append(original)
+    for field in ("category", "caption"):
+        columns.append(
+            "(SELECT json_extract(value,'$') IS NOT NULL FROM corrections WHERE hash=a.hash AND field='"
+            + field
+            + "' AND scope_id='' ORDER BY created DESC,id DESC LIMIT 1) AS user_"
+            + field
+        )
+    c.execute("CREATE VIEW effective_assets AS SELECT " + ",".join(columns) + " FROM assets a")

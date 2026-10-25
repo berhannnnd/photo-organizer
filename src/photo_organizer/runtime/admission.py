@@ -47,6 +47,7 @@ class Admission:
         self.state, self.task_id, self.item_id = state, task_id, item_id
         self.operation, self.spec, self.progress, self.budget = operation, spec, progress, budget
         self.started, self.previous = started, previous
+        self.admitted = False
 
     def _check(self, c):
         job = c.execute("SELECT control FROM jobs WHERE id=?", (self.task_id,)).fetchone()
@@ -90,6 +91,7 @@ class Admission:
                     "Increase budget to resume; completed items are preserved",
                 )
             self.progress.update(images=images, requests=requests)
+            self.admitted = True
             c.execute(
                 "UPDATE job_items SET charged=1 WHERE job_id=? AND item_id=?",
                 (self.task_id, self.item_id),

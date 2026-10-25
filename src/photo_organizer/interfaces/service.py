@@ -52,6 +52,14 @@ def dispatch(state, operation, arguments):
                 "platform": platform.system(),
                 "operations": list(OPERATIONS) + list(EXTENSIONS),
                 "outputs": ["album", "copy", "compress"],
+                "limits": {
+                    "group_levels": 8,
+                    "proposal_groups": 200,
+                    "relative_path_bytes": 2048,
+                    "result_page": 1000,
+                    "evidence_batch": 100,
+                    "image_long_edge": 4096,
+                },
                 "query": [
                     "metadata",
                     "indexed_facts",
