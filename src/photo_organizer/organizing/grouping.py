@@ -1,9 +1,38 @@
 """Composable deterministic grouping levels; explicit overlap and unknown handling."""
 
+from collections import Counter
+
 from photo_organizer.search.predicates import predicate
 from photo_organizer.storage.filesystem import relative_parts
 
 FIELDS = {"year", "month", "category", "orientation", "none"}
+
+
+def selected_summary(rows, date_basis):
+    """Compute file-level totals before multi-membership expansion."""
+    orientation = Counter()
+    categories = Counter()
+    for row in rows:
+        orientation[
+            "landscape"
+            if row["width"] > row["height"]
+            else "portrait"
+            if row["width"] < row["height"]
+            else "square"
+        ] += 1
+        category = (
+            row["category"]
+            if (row["vision_state"] == "complete" or row["user_category"]) and row["category"]
+            else "needs-review"
+        )
+        categories[category] += 1
+    return {
+        "basis": "selected_files_before_membership_expansion",
+        "orientations": dict(orientation),
+        "categories": dict(categories),
+        "date_basis": date_basis,
+        "date_unknown": sum(not row["taken"] for row in rows),
+    }
 
 
 def compile_levels(c, spec):
@@ -55,7 +84,7 @@ def compile_levels(c, spec):
             rows = c.execute(
                 "SELECT f.id,("
                 + sql
-                + ") AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1",
+                + ") AS verdict FROM files f LEFT JOIN effective_assets a ON a.hash=f.hash WHERE f.present=1",
                 args,
             ).fetchall()
             compiled_rules.append(
@@ -81,7 +110,8 @@ def paths(row, levels):
             elif field == "category":
                 names = [
                     row["category"]
-                    if row["vision_state"] == "complete" and row["category"]
+                    if (row["vision_state"] == "complete" or row["user_category"])
+                    and row["category"]
                     else "needs-review"
                 ]
             elif field == "orientation":

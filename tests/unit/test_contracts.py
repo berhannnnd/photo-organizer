@@ -130,6 +130,55 @@ class ContractTests(unittest.TestCase):
         transparent = Image.new("RGBA", (3, 3), (0, 0, 0, 0))
         self.assertEqual(normalized(transparent).getpixel((0, 0)), (255, 255, 255))
 
+    def test_grayscale_with_rgb_icc_profile(self):
+        image = Image.new("L", (4, 4), 128)
+        image.info["icc_profile"] = ImageCms.ImageCmsProfile(
+            ImageCms.createProfile("sRGB")
+        ).tobytes()
+        converted = normalized(image)
+        self.assertEqual(converted.mode, "RGB")
+        self.assertEqual(converted.getpixel((0, 0)), (128, 128, 128))
+        image.info["icc_profile"] = b"invalid profile"
+        with self.assertRaisesRegex(ValueError, "color profile"):
+            normalized(image)
+
+    def test_rule_and_field_grouping_use_corrected_categories(self):
+        row = self.all["items"][0]
+        annotations.correct(
+            self.state,
+            self.all["result_set_id"],
+            [{"file_id": row["id"], "hash": row["hash"], "changes": {"category": "family"}}],
+        )
+        for levels in (
+            [{"field": "category"}],
+            [{"rules": [{"name": "family", "where": {"category": "family"}}]}],
+        ):
+            with self.subTest(levels=levels):
+                created = plan(
+                    self.state, {"result_set_id": self.all["result_set_id"], "levels": levels}
+                )
+                with connect(self.state) as c:
+                    action = c.execute(
+                        "SELECT relative FROM actions WHERE plan_id=? AND file_id=?",
+                        (created["plan_id"], row["id"]),
+                    ).fetchone()
+                self.assertTrue(action[0].startswith("family/"), action[0])
+
+    def test_copy_rejects_resize_options_before_creating_a_plan(self):
+        with self.assertRaisesRegex(ValueError, "require compress"):
+            plan(self.state, {"long_edge": 800}, str(self.base / "output"), "copy")
+        with connect(self.state) as c:
+            self.assertEqual(c.execute("SELECT count(*) FROM plans").fetchone()[0], 0)
+
+    def test_group_schema_requires_field_or_rules_exclusively(self):
+        schema = operation_schema(None, "plan")["input_schema"]
+        validator = Draft202012Validator(schema)
+        rule = {"name": "Animal", "where": {"category": "animal"}}
+        for level in ({}, {"field": "category", "rules": [rule]}, {"rules": [rule] * 51}):
+            self.assertTrue(list(validator.iter_errors({"spec": {"levels": [level]}})))
+        for level in ({"field": "category"}, {"rules": [rule], "overlap": "multi"}):
+            self.assertFalse(list(validator.iter_errors({"spec": {"levels": [level]}})))
+
     def test_dynamic_recipe_is_explicit_and_snapshot_does_not_expand(self):
         from photo_organizer.library import recipes
 

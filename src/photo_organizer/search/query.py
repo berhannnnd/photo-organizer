@@ -19,7 +19,7 @@ def compile_rule(rule):
 def select(c, rule):
     where, args = compile_rule(rule)
     return c.execute(
-        "SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state FROM files f JOIN effective_assets a ON a.hash=f.hash WHERE "
+        "SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state,a.user_category FROM files f JOIN effective_assets a ON a.hash=f.hash WHERE "
         + where
         + " ORDER BY f.id",
         args,

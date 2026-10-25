@@ -225,7 +225,7 @@ def select_snapshot(c, result_id, accept_candidates=False):
             "snapshot contains offline or disabled sources; synchronize or enable them before planning"
         )
     return c.execute(
-        """SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state
+        """SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state,a.user_category
         FROM result_members m JOIN files f ON f.id=m.file_id JOIN effective_assets a ON a.hash=m.hash
         WHERE m.result_id=? AND m.verdict IN ('matched','candidate') ORDER BY f.id""",
         (result_id,),

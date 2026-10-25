@@ -7,7 +7,7 @@ import time
 import uuid
 from pathlib import Path
 
-from photo_organizer.organizing.grouping import compile_levels, paths
+from photo_organizer.organizing.grouping import compile_levels, paths, selected_summary
 from photo_organizer.search.query import select
 from photo_organizer.storage.catalog import connect, report, writer_lock
 from photo_organizer.storage.filesystem import relative_parts
@@ -35,6 +35,10 @@ def plan(state, spec, target=None, mode="album"):
         "date_basis",
     }:
         raise ValueError("invalid plan spec")
+    if mode != "compress" and any(k in spec for k in ("quality", "long_edge", "max_bytes")):
+        raise ValueError(
+            "quality, long_edge and max_bytes require compress mode; copy preserves original bytes"
+        )
     if mode == "compress":
         if type(spec.get("quality", 82)) is not int or not 1 <= spec.get("quality", 82) <= 95:
             raise ValueError("invalid JPEG quality")
@@ -154,6 +158,7 @@ def plan(state, spec, target=None, mode="album"):
             "plan_id": plan_id,
             "selected": len(items),
             "memberships": len(actions),
+            "selected_summary": selected_summary(items, date_basis),
             "estimated_source_bytes": estimated_bytes,
             "output_size_note": "copy preserves bytes; compression size is measured during execution",
             "groups": counts,

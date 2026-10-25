@@ -63,6 +63,8 @@ A rules level: `{"rules":[{"name":"Cats","where":{"all_tags":["cat"]}}],"overlap
 Overlap: `error` (ask), `first` (explicit precedence), `multi` (all matching groups).
 Unknown rule judgments enter `needs-review`, and proven nonmatches enter `unclassified`.
 Counts distinguish selected photos from expanded memberships.
+Plan responses include `selected_summary` with file-level orientation/category
+counts and the unknown-date count for the chosen date basis, before overlap expansion.
 
 `photo_enrich(result_set_id, condition)` can evaluate a new
 criterion using the host's configured vision provider. Start the MCP server with
@@ -113,6 +115,15 @@ Discover accepted arguments before calling an unfamiliar operation. Role names a
 `capability-probe` and `capability-status`. Credentials are named environment references;
 never embed secrets in result records or provider URLs. Host capabilities use explicit
 submission rather than pretending the engine can invoke an arbitrary host tool.
+
+For the Docker PaddleOCR backend, configure `ocr` with `protocol: paddleocr`,
+`endpoint: http://127.0.0.1:18080/ocr`, `model: PP-OCRv5_server`, an explicit
+`revision` identifying the deployed model/runtime, `concurrency: 1`, and an adequate
+timeout. Probe with a known text-bearing image and `expected_text`. Native PaddleX
+responses are converted to text, confidence and input-pixel `xyxy` boxes. Full-image
+rotation/unwarping is disabled in this adapter to preserve coordinate alignment;
+EXIF orientation is already applied by preprocessing. Line orientation remains a
+server setting. Use `review-detail` or host crop review for difficult rotated text.
 
 - `vector-submit` imports bounded host image/query vectors with a declared space,
   model and revision. `vector-search` uses a cached query or reference photo in that

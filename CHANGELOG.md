@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — real-library integration
+
+- Add native PaddleOCR HTTP configuration and validated text/coordinate extraction
+  for the local Docker service.
+- Accept grayscale/palette images carrying RGB ICC profiles; bump preprocessing
+  identity so affected derivatives and model indexes cannot silently reuse old outputs.
+- Expose composable operations to the GLM Skill test harness and preserve complete
+  engine pages instead of truncating them behind an unchanged pagination cursor.
+- Use corrected metadata consistently in field/rule grouping; reject resize options
+  in byte-preserving copy plans before any export can execute.
+- Make grouping schemas match runtime exclusivity/limits and clarify selection versus
+  grouping-proposal identities. The test agent now consumes the engine's real schemas.
+- Clarify missing hard evidence, scoped selection handoffs and export modes in the Skill.
+
 ## 0.2.0a3 — development candidate
 
 - Complete endpoint-wide admission, foreground priority, actual request reservations,

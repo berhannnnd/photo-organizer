@@ -83,13 +83,26 @@ RULE = obj(
 )
 GROUP = obj({"path": array(STRING, 8, 1), "ids": array(INTEGER, 100000)}, ["path", "ids"])
 RULE_GROUP = obj({"name": STRING, "where": {"$ref": "#/$defs/rule"}}, ["name", "where"])
-LEVEL = obj(
-    {
-        "field": {"type": "string", "enum": ["year", "month", "category", "orientation", "none"]},
-        "rules": array(RULE_GROUP, 200),
-        "overlap": {"type": "string", "enum": ["error", "first", "multi"]},
-    }
-)
+LEVEL = {
+    "oneOf": [
+        obj(
+            {
+                "field": {
+                    "type": "string",
+                    "enum": ["year", "month", "category", "orientation", "none"],
+                }
+            },
+            ["field"],
+        ),
+        obj(
+            {
+                "rules": array(RULE_GROUP, 50, 1),
+                "overlap": {"type": "string", "enum": ["error", "first", "multi"]},
+            },
+            ["rules"],
+        ),
+    ]
+}
 PLAN = obj(
     {
         "filter": {"$ref": "#/$defs/rule"},
@@ -97,7 +110,7 @@ PLAN = obj(
         "group_spec_id": STRING,
         "accept_candidates": BOOL,
         "group_by": STRING,
-        "groups": array(RULE_GROUP, 200),
+        "groups": array(RULE_GROUP, 50, 1),
         "levels": array(LEVEL, 8, 1),
         "overlap": {"type": "string", "enum": ["error", "first", "multi"]},
         "name_template": STRING,

@@ -52,6 +52,13 @@ def operation_schema(state, operation):
     from photo_organizer.interfaces.schemas import RULE, argument_schema, obj
 
     properties = {p["name"]: argument_schema(operation, p) for p in parameters}
+    if operation == "group-propose":
+        properties["parent_id"]["description"] = (
+            "Optional predecessor group_spec_id when editing a grouping proposal; never a result ID."
+        )
+        properties["result_id"]["description"] = (
+            "Exact current selection result_set_id; after select/refinement, use its NEW result ID."
+        )
     schema = obj(properties, [p["name"] for p in parameters if p["required"]])
     schema.update(
         {"$schema": "https://json-schema.org/draft/2020-12/schema", "$defs": {"rule": RULE}}

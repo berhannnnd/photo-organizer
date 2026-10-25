@@ -1,0 +1,27 @@
+name: photo-organizer-ocr
+services:
+  ocr:
+    build:
+      context: .
+    image: photo-organizer-ocr:ppocrv5-arm64
+    platform: linux/arm64
+    ports:
+      - "127.0.0.1:${OCR_PORT:-18080}:8080"
+    environment:
+      PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK: "True"
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    volumes:
+      - models:/root/.paddlex
+    cpus: 4
+    mem_limit: 6g
+    shm_size: 1g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10m
+      retries: 3
+volumes:
+  models:

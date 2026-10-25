@@ -20,6 +20,10 @@ from photo_organizer.storage.catalog import connect
 
 def ocr_image(state, path, config):
     protocol = config["protocol"]
+    if protocol == "paddleocr":
+        from photo_organizer.capabilities.adapters.ocr import recognize
+
+        return recognize(config, path)
     if protocol == "tesseract":
         executable = shutil.which("tesseract")
         if not executable:

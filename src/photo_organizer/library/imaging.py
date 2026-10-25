@@ -4,7 +4,7 @@ import io
 
 from PIL import Image, ImageCms, ImageOps
 
-PREPROCESSING = "pillow-orient-srgb-1280-q82-v2"
+PREPROCESSING = "pillow-orient-srgb-1280-q82-v3"
 
 
 def normalized(image):
@@ -14,6 +14,11 @@ def normalized(image):
     if profile:
         try:
             source = ImageCms.ImageCmsProfile(io.BytesIO(profile))
+            # Real photo libraries include grayscale/palette images carrying an
+            # RGB profile. Expand those samples before asking LittleCMS to build
+            # an RGB transform; keep malformed profiles as explicit failures.
+            if source.profile.xcolor_space.strip() == "RGB" and image.mode in ("L", "LA", "P"):
+                image = image.convert("RGB")
             image = ImageCms.profileToProfile(
                 image, source, ImageCms.createProfile("sRGB"), outputMode="RGB"
             )

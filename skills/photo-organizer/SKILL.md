@@ -17,9 +17,24 @@ for operation discovery and examples; use the same library state across turns.
 - Sync authorized roots when freshness matters. Capture dates, file timestamps and
   import times are different evidence. Faces receive stable cluster IDs, not guessed
   real names. Read the user's corrections before making another inference.
+  Before costly retrieval/review or organization, identify the request's hard
+  constraints. If required identity, time, place or preference evidence is unavailable,
+  ask for the missing definition/reference or permission to relax that constraint.
+  Visual resemblance cannot establish a named person's identity, exact place or date.
+  If the user cannot supply it, explain the missing evidence and stop that dependent
+  workflow; do not spend model calls trying to prove nonvisual facts from appearance.
+  Supplying one clue narrows the task but does not satisfy its other hard constraints.
+  State which requirements still need evidence and which model roles need configuration.
 - Search into a persistent result ID. Use `parent_id` for second-stage filtering or
   retrieval; use explicit selections or set operations to compose results. Pagination
   does not change membership. A broader request needs a broader parent scope.
+  The returned `result_set_id` identifies the selected result; returned `parent_id`
+  identifies its broader ancestor. Pass the selected result's ID to scoped review,
+  filtering and organization, and check its member count before a model batch.
+  A `select`, `combine` or refinement creates a new result ID: use that new ID for
+  subsequent grouping and planning. A grouping proposal belongs to exactly that
+  selection. Its optional `parent_id` refers to an earlier grouping proposal for
+  edits, not to a search result or its ancestor.
 - Keep vector candidates distinct from semantic matches. Review exact outstanding
   criteria and filter by those judgments to establish matches, or record an explicit
   agent/user selection when asked to curate freely. `order` only ranks members.
@@ -35,6 +50,11 @@ for operation discovery and examples; use the same library state across turns.
   according to user intent. Plan with the whole selected result ID, inspect actions,
   counts, target and conflicts, then apply within existing authorization. Do not ask
   again for the same authorized action. Originals remain unchanged.
+  Map output requirements to the actual mode: `copy` preserves original bytes;
+  resizing, JPEG conversion, quality or byte limits require `compress`. Confirm
+  the preview's mode and dimensions/quality before applying, not after exporting.
+  Report engine-provided totals and `selected_summary`; do not mentally sum large
+  group tables. Distinguish selected-file totals from expanded memberships.
 - Save cross-task preferences only when the user explicitly asks to remember them,
   using versioned recipes. Dynamic recipes refresh explicitly; keep frozen selections
   stable. Use the coverage ledger for complete-scope claims.
@@ -43,6 +63,10 @@ for operation discovery and examples; use the same library state across turns.
   inspect execution receipts before retrying. A collection can be selected again.
 
 Reuse prior scope and preference decisions. Ask only when missing information changes
-what photos or output the user wants. Subjective choices may be made when delegated;
-state the criterion instead of presenting it as universal. Never claim real-model
+what photos or output the user wants. For subjective criteria without prior preference
+context, ask one short question about the desired direction or permission to choose.
+An instruction to find photos delegates the action, not automatically the user's taste.
+If the user explicitly delegates taste or requests open-ended exploration without
+questions, choose a criterion, state it and return diverse candidates instead of
+presenting that criterion as universal. Never claim real-model
 accuracy, exhaustive coverage or independent-host acceptance from local code tests.

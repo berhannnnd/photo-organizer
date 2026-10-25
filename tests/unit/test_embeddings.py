@@ -119,4 +119,6 @@ class EmbeddingTests(unittest.TestCase):
         )
         self.assertEqual(p["selected"], 3)
         self.assertEqual(p["memberships"], 6)
+        self.assertEqual(p["selected_summary"]["orientations"], {"landscape": 3})
+        self.assertEqual(p["selected_summary"]["date_unknown"], 3)
         self.assertEqual(p["groups"], {"first/landscape": 3, "second/landscape": 3})

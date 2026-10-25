@@ -13,7 +13,7 @@ ROLES = {
     "vision": ("anthropic", "openai", "ollama", "host"),
     "image_text": ("ollama", "photo-http", "host"),
     "description_text": ("ollama", "openai-text", "photo-http", "host"),
-    "ocr": ("tesseract", "vision", "photo-http", "host"),
+    "ocr": ("tesseract", "vision", "paddleocr", "photo-http", "host"),
     "faces": ("opencv", "photo-http", "host"),
 }
 FIELDS = {
@@ -49,7 +49,7 @@ def configure(state, role, config):
         or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", config["api_key_env"])
     ):
         raise ValueError("use a credential environment variable name")
-    if protocol in ("anthropic", "openai", "ollama", "openai-text", "photo-http"):
+    if protocol in ("anthropic", "openai", "ollama", "openai-text", "photo-http", "paddleocr"):
         endpoint = config.get("endpoint", "")
         if not isinstance(endpoint, str):
             raise ValueError("endpoint must be a URL string")
@@ -66,7 +66,7 @@ def configure(state, role, config):
             raise ValueError("use credential-free HTTPS or loopback HTTP endpoint")
         if not isinstance(config.get("model"), str) or not config["model"].strip():
             raise ValueError("model is required")
-        if protocol in ("openai-text", "photo-http") and not config.get("revision"):
+        if protocol in ("openai-text", "photo-http", "paddleocr") and not config.get("revision"):
             raise ValueError("explicit remote model revision required")
         if (
             role in ("image_text", "description_text", "faces")
