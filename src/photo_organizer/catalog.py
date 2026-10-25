@@ -33,10 +33,12 @@ def connect(state):
     state.mkdir(parents=True, exist_ok=True)
     c = sqlite3.connect(state / 'catalog.sqlite', timeout=30)
     c.row_factory = sqlite3.Row
-    c.execute('PRAGMA journal_mode=WAL')
-    c.execute('PRAGMA foreign_keys=ON')
-    c.executescript(SCHEMA)
     try:
+        c.execute('PRAGMA journal_mode=WAL')
+        c.execute('PRAGMA foreign_keys=ON')
+        c.executescript(SCHEMA)
+        from .migrations import migrate
+        migrate(c)
         with c:
             yield c
     finally:

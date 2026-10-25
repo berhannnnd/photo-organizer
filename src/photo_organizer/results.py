@@ -55,24 +55,31 @@ def create(state, rule, parent_id=None):
                 scope = " AND f.id IN (SELECT file_id FROM result_members WHERE result_id=? AND verdict IN ('matched','candidate'))"
                 scope_params.append(parent_id)
             rows = c.execute("SELECT f.id,f.path,f.hash,CASE WHEN f.error IS NOT NULL THEN 'error' WHEN (" + sql + ") THEN 'matched' WHEN NOT (" + sql + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1" + scope + ' ORDER BY f.id', params + params + scope_params).fetchall()
-            candidate_parent = bool(parent_id and 'candidate' in json.loads(require(c,parent_id)['counts']))
-            rows = [dict(r) for r in rows]
-            if candidate_parent:
-                for r in rows:
-                    if r['verdict']=='matched': r['verdict']='candidate'
+            from .selection import context, save
+            from .evaluation import evaluate, semantic_requirements
+            ctx=context(c,parent_id) if parent_id else {'coverage':'evaluated_scope','requirements':[]}
+            pending=set(ctx.get('requirements',[]))-semantic_requirements(rule)
+            ctx={**ctx,'requirements':sorted(pending)}
+            ancestry=[];ancestor=parent_id
+            while ancestor:
+                ancestry.append(ancestor);ancestor=require(c,ancestor)['parent_id']
+            details={}; converted=[]
             scores = {r['file_id']:r['score'] for r in c.execute('SELECT file_id,score FROM result_members WHERE result_id=?',(parent_id,))} if parent_id else {}
-            counts = {'candidate':0} if candidate_parent else {}
-            for row in rows: counts[row['verdict']] = counts.get(row['verdict'], 0) + 1
-            result_id = uuid.uuid4().hex
-            c.execute('INSERT INTO result_sets VALUES(?,?,?,?,?)', (result_id, datetime.datetime.now(datetime.timezone.utc).isoformat(), parent_id, encoded, json.dumps(counts)))
-            c.executemany('INSERT INTO result_members(result_id,file_id,hash,path,verdict,score) VALUES(?,?,?,?,?,?)', [(result_id, r['id'], r['hash'], r['path'], r['verdict'], scores.get(r['id'])) for r in rows])
+            for r in rows:
+                asset=c.execute('SELECT f.id,f.hash,a.vision_state FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.id=?',(r['id'],)).fetchone()
+                detail={'verdict':'error'} if r['verdict']=='error' else evaluate(c,asset,rule,ancestry)
+                verdict=detail['verdict']
+                if verdict=='matched' and pending: verdict='candidate'
+                details[r['id']]=detail
+                converted.append({'file_id':r['id'],'hash':r['hash'],'path':r['path'],'verdict':verdict,'score':scores.get(r['id'])})
+            result_id=save(c,converted,rule,parent_id,ctx,details)
     return page(state, result_id)
 
 
 def page(state, result_id, limit=50, offset=0, verdict=None):
     if type(limit) is not int or type(offset) is not int or not 1 <= limit <= 1000 or offset < 0:
         raise ValueError('invalid pagination')
-    if verdict not in (None, 'candidate', 'matched', 'not_matched', 'unknown_or_unanalyzed', 'error'):
+    if verdict not in (None, 'candidate', 'matched', 'not_matched', 'unknown_or_unanalyzed', 'unknown', 'unanalyzed', 'error'):
         raise ValueError('invalid verdict')
     with connect(state) as c:
         initialize(c)
@@ -84,10 +91,18 @@ def page(state, result_id, limit=50, offset=0, verdict=None):
             CASE WHEN f.id IS NULL OR f.present!=1 OR f.error IS NOT NULL OR f.hash IS NOT m.hash THEN 1 ELSE 0 END AS stale
             FROM result_members m LEFT JOIN files f ON f.id=m.file_id LEFT JOIN assets a ON a.hash=m.hash
             WHERE m.result_id=? AND m.verdict=? ORDER BY m.score DESC,m.file_id LIMIT ? OFFSET ?''', (result_id, verdict, limit, offset)).fetchall()
+        from .selection import context
+        ctx=context(c,result_id)
+        enriched=[]
+        for row in rows:
+            item=dict(row)
+            detail=c.execute('SELECT detail FROM result_details WHERE result_id=? AND file_id=?',(result_id,row['id'])).fetchone()
+            item['judgment_detail']=json.loads(detail[0]) if detail else None
+            enriched.append(item)
         total = counts.get(verdict, 0)
         return {'result_set_id': result_id, 'parent_id': result['parent_id'], 'created': result['created'],
                 'selection_kind': 'candidates' if 'candidate' in counts else 'evidence_matches', 'rule': json.loads(result['rule']), 'judgments': counts, 'total': total,
-                'items': [dict(r) for r in rows], 'offset': offset, 'limit': limit,
+                'context':ctx, 'items': enriched, 'offset': offset, 'limit': limit,
                 'next_offset': offset + limit if offset + limit < total else None,
                 'stale_members': stale_count(c, result_id), 'model_calls': 0,
                 'freshness': 'relative_to_last_scan; run scan before operations requiring current files'}

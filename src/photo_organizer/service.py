@@ -6,7 +6,9 @@ from .results import create, page
 from .planning import plan
 from .execution import apply
 
-API_VERSION = '1'
+from .operations import OPERATIONS as EXTENSIONS
+
+API_VERSION = '2'
 OPERATIONS = ('capabilities', 'status', 'scan', 'search', 'results', 'plan', 'apply', 'embed-index', 'describe-index', 'retrieve', 'review')
 
 
@@ -17,13 +19,14 @@ def dispatch(state, operation, arguments):
         if operation == 'capabilities':
             if arguments: raise ValueError('capabilities takes no arguments')
             data = {'api_version': API_VERSION, 'platform': platform.system(),
-                    'operations': list(OPERATIONS), 'outputs': ['album', 'copy', 'compress'],
+                    'operations': list(OPERATIONS)+list(EXTENSIONS), 'outputs': ['album', 'copy', 'compress'],
                     'query': ['metadata', 'indexed_facts', 'and', 'or', 'not', 'saved_semantic_judgments', 'image_text_candidates'],
                     'result_snapshots': True, 'models_required_for_metadata': False,
                     'vision_protocols': ['anthropic'],
                     'limitations': ['POSIX only; Windows unsupported', 'synchronous tasks; persistent job scheduler pending',
                                     'unknown and unanalyzed counts currently combined', 'user corrections and naming templates pending',
                                     'face clustering, watcher and automatic grouping pending']}
+        elif operation in EXTENSIONS: data=EXTENSIONS[operation](state,**arguments)
         elif operation == 'status':
             if arguments: raise ValueError('status takes no arguments')
             with connect(state) as c: data = report(c)

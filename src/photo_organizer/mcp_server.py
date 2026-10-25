@@ -62,6 +62,20 @@ def main():
             return failure('missing_capability', 'Start the server with --vision-config to enable scoped visual review')
         return dispatch(args.state, 'review', {'result_set_id': result_set_id, 'condition': condition, 'config': args.vision_config})
 
+    @mcp.tool()
+    def photo_call(operation: str, arguments: dict) -> dict:
+        """Call a discovered engine operation. Use photo_operation_schema for its accepted arguments."""
+        return dispatch(args.state, operation, arguments)
+
+    @mcp.tool()
+    def photo_operation_schema(operation: str) -> dict:
+        """Discover arguments for an extended operation; no state changes."""
+        from .operations import OPERATIONS
+        import inspect
+        function=OPERATIONS.get(operation)
+        if not function: return {'error':'unknown extended operation'}
+        return {'operation':operation,'description':function.__doc__, 'arguments':[{ 'name':p.name,'required':p.default is inspect.Parameter.empty, **({} if p.default is inspect.Parameter.empty else {'default':p.default})} for p in inspect.signature(function).parameters.values() if p.name!='state']}
+
     mcp.run(transport='stdio')
 
 

@@ -73,3 +73,36 @@ same parent scope. This is needed when negative/relational facts cannot be prove
 `call describe-index` embeds current visual descriptions in the same model space. Default
 retrieval uses reciprocal-rank fusion only when both channels cover the selected scope;
 otherwise it explicitly reports image-only ranking and description coverage.
+
+## v2 composable selections and evidence
+
+Use `photo_call(operation, arguments)` for extended operations. Discover their
+arguments through `photo_operation_schema`; CLI uses the same `call` operations.
+
+- `select(result_id, ids, mode=keep|exclude|order, source=agent|user, reason)`
+  saves an explicit selection. `order` includes every current member. Explicit
+  selection permits organization but is not a semantic proof.
+- `combine(result_ids, operation=union|intersection|difference, identity=file|content)`
+  creates a new snapshot, preserving input provenance and duplicate mappings.
+- `image(result_id, file_id, long_edge=1280, crop=null)` returns a bounded JPEG as
+  base64 plus its content identity; crop uses oriented image pixel coordinates.
+- `evidence-read(result_id, condition, limit=50, offset=0)` returns the active
+  condition version and observations. `evidence-submit(result_id, records, source,
+  condition, expected_version)` accepts up to 100 scoped judgments or visual labels.
+  Records require file_id/hash and verdict/evidence (or observation for labels).
+  Source is `{kind: host|provider|user, model?, version?}`. Pass the read version
+  when the condition already exists. Never mark an agent inference as a user correction.
+- `group-propose(result_id, groups, parent_id?, overlap=error|first|multi, reason)`
+  saves immutable groups `{path: [names], ids: [file IDs]}`; submitting a successor
+  implements rename, merge, split and membership corrections without rewriting history.
+- Plan with `group_spec_id` and the same `result_set_id`, or use rule-based levels.
+  `name_template` supports year/month/day/category/original/sequence/id/hash.
+  `max_bytes` on compression fails explicitly if the size target cannot be met.
+- `plan-read(plan_id, limit, offset)` reads actions and receipts. `collection()`
+  lists persistent collections; `collection(collection_id, name?, group?)` returns
+  a reusable result ID, optionally for one nested group.
+
+Unknown and unanalyzed are now separate verdicts. A candidate's exact retrieval
+criterion can be reviewed and used as a semantic filter to produce evidence matches;
+its context still reports ranked-subset coverage. Filtering only by unrelated metadata
+does not prove the original semantic request.

@@ -52,7 +52,14 @@ def export_one(c,row,plan,spec):
                         if im.mode=='RGBA':
                             bg=Image.new('RGB',im.size,'white'); bg.paste(im,mask=im.getchannel('A')); im=bg
                         else: im=im.convert('RGB')
-                        im.save(out,format='JPEG',quality=spec.get('quality',82))
+                        import io
+                        quality=spec.get('quality',82)
+                        while True:
+                            encoded=io.BytesIO();im.save(encoded,format='JPEG',quality=quality)
+                            if 'max_bytes' not in spec or encoded.tell()<=spec['max_bytes']: break
+                            if quality<=10: raise ValueError('cannot meet max_bytes without changing requested dimensions; adjust export settings')
+                            quality=max(10,quality-5)
+                        out.write(encoded.getvalue())
                     source.seek(0)
                     if digest_file(source)!=row['hash']: raise ValueError('source changed during compression')
                 out.flush(); os.fsync(out.fileno())
@@ -93,4 +100,6 @@ def apply(state,plan_id):
                     error=type(e).__name__+': '+str(e)[:240]
                     with c: c.execute('UPDATE actions SET error=? WHERE id=?',(error,row['id']))
                     errors.append({'action':row['id'],'error':error})
-        return {'plan_id':plan_id,'mode':plan['mode'],'total':len(rows),'outcomes':outcomes,'errors':errors,'seconds':time.perf_counter()-start,'model_calls':0,'target':plan['target']}
+        from .organization import record_collection
+        with c: collection_id,result_id=record_collection(c,plan)
+        return {'collection_id':collection_id,'result_set_id':result_id,'plan_id':plan_id,'mode':plan['mode'],'total':len(rows),'outcomes':outcomes,'errors':errors,'seconds':time.perf_counter()-start,'model_calls':0,'target':plan['target']}

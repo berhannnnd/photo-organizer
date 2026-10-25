@@ -16,10 +16,11 @@ MODES={'album','copy','compress'}
 def plan(state,spec,target=None,mode='album'):
     start=time.perf_counter()
     if mode not in MODES: raise ValueError('unsupported output mode')
-    if not isinstance(spec,dict) or set(spec)-{'filter','group_by','groups','quality','long_edge','result_set_id','accept_candidates','levels','overlap'}: raise ValueError('invalid plan spec')
+    if not isinstance(spec,dict) or set(spec)-{'filter','group_by','groups','quality','long_edge','result_set_id','accept_candidates','levels','overlap','group_spec_id','name_template','max_bytes'}: raise ValueError('invalid plan spec')
     if mode=='compress':
         if type(spec.get('quality',82)) is not int or not 1<=spec.get('quality',82)<=95: raise ValueError('invalid JPEG quality')
         if type(spec.get('long_edge',1600)) is not int or not 64<=spec.get('long_edge',1600)<=8192: raise ValueError('invalid long edge')
+    if 'max_bytes' in spec and (mode!='compress' or type(spec['max_bytes']) is not int or spec['max_bytes']<1024): raise ValueError('max_bytes requires compress and at least 1024 bytes')
     with writer_lock(state),connect(state) as c:
         if mode!='album':
             if not target: raise ValueError('destination required')
@@ -33,14 +34,24 @@ def plan(state,spec,target=None,mode='album'):
             items=select_snapshot(c,spec['result_set_id'],spec.get('accept_candidates') is True)
         else:
             items=select(c,spec.get('filter',{}))
-        levels=compile_levels(c,spec)
+        from .organization import group_paths, filename
+        if spec.get('group_spec_id') and any(k in spec for k in ('levels','group_by','groups')): raise ValueError('group spec cannot be mixed with grouping rules')
+        assigned=group_paths(c,spec['group_spec_id'],spec.get('result_set_id')) if spec.get('group_spec_id') else None
+        levels=compile_levels(c,spec) if assigned is None else []
         plan_id=uuid.uuid4().hex;actions=[];counts={}
-        for row in items:
-            for group in paths(row,levels):
+        destinations=set()
+        for sequence,row in enumerate(items,1):
+            for group in assigned.get(row['id'],['unclassified']) if assigned is not None else paths(row,levels):
                 counts[group]=counts.get(group,0)+1
                 suffix='.jpg' if mode=='compress' else Path(row['path']).suffix.lower()
                 if not suffix or len(suffix)>12 or not suffix[1:].isalnum(): suffix='.image'
-                relative=f'{group}/{row["id"]:06d}-{row["hash"][:12]}{suffix}'
+                name=filename(spec.get('name_template','{sequence}-{hash}'),row,group,sequence,suffix)
+                relative=f'{group}/{name}'
+                import unicodedata
+                collision=unicodedata.normalize('NFC',relative).casefold()
+                if collision in destinations: raise ValueError('naming collision; include id or sequence in template')
+                if len(relative.encode())>2048: raise ValueError('destination path exceeds 2048 bytes')
+                destinations.add(collision)
                 relative_parts(relative)
                 actions.append((uuid.uuid4().hex,plan_id,row['id'],row['path'],row['hash'],relative))
         with c:
