@@ -79,9 +79,19 @@ def register(c,provider,blob):
     c.execute('INSERT OR IGNORE INTO embedding_spaces VALUES(?,?,?,?,?,?)',(provider.space,provider.model,provider.digest,provider.endpoint,PREP,dimensions))
 
 
+def provider_for(state,model,endpoint,role='image_text'):
+    with connect(state) as c:
+        row=c.execute('SELECT role FROM capability_configs WHERE role=?',(role,)).fetchone()
+    if row:
+        from .capabilities import get_config
+        from .adapters.encoding import Encoder
+        return Encoder(get_config(state,role))
+    return Ollama(model,endpoint)
+
+
 def index(state,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1:11434',limit=None):
     if limit is not None and (type(limit) is not int or limit<1): raise ValueError('limit must be positive')
-    provider=Ollama(model,endpoint);start=time.perf_counter();completed=0;errors=[]
+    provider=provider_for(state,model,endpoint);start=time.perf_counter();completed=0;errors=[]
     # Independent stage lock: short SQL commits may coexist with cloud visual indexing.
     with writer_lock(Path(state)/'embedding-lock'),connect(state) as c:
         initialize(c)
@@ -111,7 +121,7 @@ def index(state,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1:11434
 
 def index_descriptions(state,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1:11434',limit=None):
     if limit is not None and (type(limit) is not int or limit<1): raise ValueError('limit must be positive')
-    provider=Ollama(model,endpoint);start=time.perf_counter();completed=0;errors=[]
+    provider=provider_for(state,model,endpoint);start=time.perf_counter();completed=0;errors=[]
     with writer_lock(Path(state)/'description-lock'),connect(state) as c:
         initialize(c)
         rows=c.execute("SELECT a.hash,a.caption,a.vision_version,v.text_hash,v.observation_version FROM assets a LEFT JOIN description_vectors v ON v.hash=a.hash AND v.space_id=? WHERE a.vision_state='complete' AND a.caption IS NOT NULL AND EXISTS(SELECT 1 FROM files f WHERE f.hash=a.hash AND f.present=1 AND f.error IS NULL)",(provider.space,)).fetchall()
@@ -135,7 +145,7 @@ def search(state,text,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1
     if not isinstance(text,str) or not 1<=len(text.strip())<=2000: raise ValueError('text must contain 1..2000 characters')
     if type(top_k) is not int or not 1<=top_k<=1000: raise ValueError('top_k must be 1..1000')
     if ranking not in ('image','hybrid'): raise ValueError('ranking must be image or hybrid')
-    text=text.strip();start=time.perf_counter();provider=Ollama(model,endpoint)
+    text=text.strip();start=time.perf_counter();provider=provider_for(state,model,endpoint)
     with connect(state) as c:
         initialize(c);results.initialize(c)
         space=c.execute('SELECT * FROM embedding_spaces WHERE id=?',(provider.space,)).fetchone()

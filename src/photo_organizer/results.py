@@ -54,7 +54,7 @@ def create(state, rule, parent_id=None):
             if parent_id:
                 scope = " AND f.id IN (SELECT file_id FROM result_members WHERE result_id=? AND verdict IN ('matched','candidate'))"
                 scope_params.append(parent_id)
-            rows = c.execute("SELECT f.id,f.path,f.hash,CASE WHEN f.error IS NOT NULL THEN 'error' WHEN (" + sql + ") THEN 'matched' WHEN NOT (" + sql + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1" + scope + ' ORDER BY f.id', params + params + scope_params).fetchall()
+            rows = c.execute("SELECT f.id,f.path,f.hash,CASE WHEN f.error IS NOT NULL THEN 'error' WHEN (" + sql + ") THEN 'matched' WHEN NOT (" + sql + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1 AND NOT EXISTS(SELECT 1 FROM roots rt WHERE rt.path=f.root AND (rt.status='offline' OR rt.enabled=0))" + scope + ' ORDER BY f.id', params + params + scope_params).fetchall()
             from .selection import context, save
             from .evaluation import evaluate, semantic_requirements
             ctx=context(c,parent_id) if parent_id else {'coverage':'evaluated_scope','requirements':[]}

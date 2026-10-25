@@ -57,10 +57,7 @@ def main():
     @mcp.tool()
     def photo_enrich(result_set_id: str, condition: str) -> dict:
         """Review a criterion only within a selected result, using the host-configured vision provider. May take time."""
-        if not args.vision_config:
-            from .service import failure
-            return failure('missing_capability', 'Start the server with --vision-config to enable scoped visual review')
-        return dispatch(args.state, 'review', {'result_set_id': result_set_id, 'condition': condition, 'config': args.vision_config})
+        return dispatch(args.state, 'review', {'result_set_id': result_set_id, 'condition': condition, **({'config':args.vision_config} if args.vision_config else {})})
 
     @mcp.tool()
     def photo_call(operation: str, arguments: dict) -> dict:

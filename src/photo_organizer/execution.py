@@ -74,12 +74,16 @@ def export_one(c,row,plan,spec):
             # Keep running journal and temp; next invocation reconciles instead of overwriting.
             raise
 
-def apply(state,plan_id):
+def apply(state,plan_id,action_ids=None,finalize=True):
     start=time.perf_counter(); outcomes={}; errors=[]
     with writer_lock(state),connect(state) as c:
         plan=c.execute('SELECT * FROM plans WHERE id=?',(plan_id,)).fetchone()
         if not plan: raise ValueError('unknown plan')
         spec=json.loads(plan['spec']); rows=c.execute('SELECT * FROM actions WHERE plan_id=? ORDER BY file_id',(plan_id,)).fetchall()
+        if action_ids is not None:
+            selected=set(action_ids)
+            if not selected<={r['id'] for r in rows}: raise ValueError('actions outside plan')
+            rows=[r for r in rows if r['id'] in selected]
         if plan['mode']=='album':
             outcomes={'memberships':0}
             for row in rows:
@@ -101,5 +105,7 @@ def apply(state,plan_id):
                     with c: c.execute('UPDATE actions SET error=? WHERE id=?',(error,row['id']))
                     errors.append({'action':row['id'],'error':error})
         from .organization import record_collection
-        with c: collection_id,result_id=record_collection(c,plan)
+        collection_id=result_id=None
+        if finalize:
+            with c: collection_id,result_id=record_collection(c,plan)
         return {'collection_id':collection_id,'result_set_id':result_id,'plan_id':plan_id,'mode':plan['mode'],'total':len(rows),'outcomes':outcomes,'errors':errors,'seconds':time.perf_counter()-start,'model_calls':0,'target':plan['target']}
