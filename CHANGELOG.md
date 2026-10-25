@@ -13,6 +13,8 @@
 - Make grouping schemas match runtime exclusivity/limits and clarify selection versus
   grouping-proposal identities. The test agent now consumes the engine's real schemas.
 - Clarify missing hard evidence, scoped selection handoffs and export modes in the Skill.
+- Keep candidate previews index-first, preserve optional composition reasons, and
+  checkpoint test-agent tool starts so long visual batches remain observable.
 
 ## 0.2.0a3 — development candidate
 

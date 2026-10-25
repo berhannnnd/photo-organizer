@@ -179,6 +179,17 @@ class ContractTests(unittest.TestCase):
         for level in ({"field": "category"}, {"rules": [rule], "overlap": "multi"}):
             self.assertFalse(list(validator.iter_errors({"spec": {"levels": [level]}})))
 
+    def test_combination_reason_survives_result_reload(self):
+        from photo_organizer.search import selection
+
+        rid = self.all["result_set_id"]
+        combined = selection.combine(self.state, [rid, rid], reason="Two exploration directions")
+        reloaded = results.page(self.state, combined["result_set_id"])
+        self.assertEqual(reloaded["total"], 3)
+        self.assertEqual(reloaded["context"]["combination_reason"], "Two exploration directions")
+        with self.assertRaises(ValueError):
+            selection.combine(self.state, [rid, rid], reason="x" * 2001)
+
     def test_dynamic_recipe_is_explicit_and_snapshot_does_not_expand(self):
         from photo_organizer.library import recipes
 

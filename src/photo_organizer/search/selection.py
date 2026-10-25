@@ -176,7 +176,9 @@ def choose(state, result_id, ids, mode="keep", source="agent", reason="", verdic
     return results.page(state, rid)
 
 
-def combine(state, result_ids, operation="union", identity="file"):
+def combine(state, result_ids, operation="union", identity="file", reason=""):
+    if not isinstance(reason, str) or len(reason) > 2000:
+        raise ValueError("invalid combination reason")
     if not isinstance(result_ids, list) or not 2 <= len(result_ids) <= 20:
         raise ValueError("provide 2..20 result IDs")
     if operation not in ("union", "intersection", "difference") or identity not in (
@@ -217,6 +219,7 @@ def combine(state, result_ids, operation="union", identity="file"):
         contexts = [context(c, rid) for rid in result_ids]
         ctx = {
             "coverage": "composed_scopes",
+            "combination_reason": reason,
             "inputs": result_ids,
             "input_contexts": contexts,
             "requirements": sorted({r for ctx in contexts for r in ctx.get("requirements", [])}),

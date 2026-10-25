@@ -82,8 +82,9 @@ arguments through `photo_operation_schema`; CLI uses `call operation-schema --ar
 - `select(result_id, ids, mode=keep|exclude|order, source=agent|user, reason)`
   saves an explicit selection. `order` includes every current member. Explicit
   selection permits organization but is not a semantic proof.
-- `combine(result_ids, operation=union|intersection|difference, identity=file|content)`
+- `combine(result_ids, operation=union|intersection|difference, identity=file|content, reason?)`
   creates a new snapshot, preserving input provenance and duplicate mappings.
+  The optional reason is bounded to 2,000 characters and retained with the composition.
 - `image(result_id, file_id, long_edge=1280, crop=null)` returns a bounded JPEG as
   base64 plus its content identity; crop uses oriented image pixel coordinates.
 - `evidence-read(result_id, condition, limit=50, offset=0)` returns the active

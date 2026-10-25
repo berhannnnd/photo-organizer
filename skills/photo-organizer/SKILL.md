@@ -41,6 +41,12 @@ for operation discovery and examples; use the same library state across turns.
   Selecting candidates for organization is permitted within user authorization,
   but does not prove their semantics. Report ranked-subset coverage even after review;
   Top-K cannot prove an exhaustive library search.
+  Match analysis cost to the requested assurance. For exploratory/candidate-only
+  previews, retrieve and curate from indexed evidence first; do not automatically
+  review every recalled photo. Use bounded visual review when the user needs a
+  verified condition (especially absence/count/relationships), or when essential
+  evidence is missing, and preserve results for reuse. Candidate curation does not
+  need to be upgraded to a semantic proof merely to return a useful preview.
 - Inspect unknown, unanalyzed, failed and stale counts separately. Missing tags are
   not evidence of absence. Boolean negatives require actual evidence. Use bounded
   image/crop reads for visual inspection or configured vision review for text-only

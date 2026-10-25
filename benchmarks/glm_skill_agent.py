@@ -85,6 +85,8 @@ def run_case(state,provider,case,output_root,trace_path):
         outputs=[]
         for call in calls:
             name=call['name'];args=call['input'];started=time.perf_counter()
+            trace.append({'event':'tool_started','name':name,'arguments':args})
+            trace_path.write_text(json.dumps({'case':case,'trace':trace,'status':'running'},ensure_ascii=False,indent=2))
             try:
                 if name=='ask_user':
                     replies=case.get('replies',[])
