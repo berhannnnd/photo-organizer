@@ -9,7 +9,6 @@ from pathlib import Path
 from photo_organizer.vision.provider import Provider
 from photo_organizer.interfaces.service import dispatch
 from photo_organizer.interfaces.discovery import operation_schema
-from photo_organizer.vision.semantic import enrich
 
 
 def tool(name, description, properties, required=()):
@@ -95,9 +94,7 @@ def run_case(state,provider,case,output_root,trace_path):
                 elif name=='photo_enrich':
                     result=dispatch(state,'results',{'result_id':args['result_set_id'],'limit':1})
                     if result['status']!='completed' or result['data']['total']>100: raise ValueError('experiment permits <=100 scoped visual reviews')
-                    from photo_organizer.capabilities.registry import vision
-                    judged=enrich(state,vision(state),args['condition'],workers=1,result_set_id=args['result_set_id'])
-                    value={'status':'partial_failed' if judged['errors'] else 'completed','data':judged}
+                    value=dispatch(state,'review',args)
                 elif name in ('photo_call','photo_operation_schema'):
                     operation=args['operation'] if name=='photo_call' else 'operation-schema'
                     arguments=args['arguments'] if name=='photo_call' else args
