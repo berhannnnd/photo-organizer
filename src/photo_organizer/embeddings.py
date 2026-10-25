@@ -165,6 +165,7 @@ def search(state,text,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1
                     score=sum(a*b for a,b in zip(query,values))
                     scored.append((score,row))
             scored.sort(key=lambda item:(-item[0],item[1]['id']))
+            image_count=len(scored)
             description_count=0;fused_enabled=False
             if ranking=='hybrid':
                 descriptions={r['hash']:r for r in c.execute("SELECT d.*,a.caption,a.vision_version FROM description_vectors d JOIN assets a ON a.hash=d.hash WHERE d.space_id=? AND a.vision_state='complete'",(provider.space,))}
@@ -194,4 +195,6 @@ def search(state,text,model='embeddinggemma-2:latest',endpoint='http://127.0.0.1
             c.rollback();raise
     result=results.page(state,rid)
     return {**result,'seconds':time.perf_counter()-start,'query_cache_hit':cached,'model_calls':0 if cached else 1,
+            'coverage':{'scope_files':len(rows),'image_vectors_searched':image_count,'description_vectors_available':description_count,'missing_image_vectors':len(rows)-image_count},
+            'coverage_notice':f'Searched {image_count} of {len(rows)} source-file image vectors. Visual-label completion is a separate stage and does not exclude files from image retrieval. Candidates are not exhaustive semantic matches.',
             'scope_note':'Ranked candidates, not verified matches or exhaustive semantic recall.'}

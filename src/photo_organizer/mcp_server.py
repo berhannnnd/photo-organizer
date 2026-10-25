@@ -6,6 +6,7 @@ from .service import dispatch
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--state', required=True)
+    parser.add_argument('--vision-config', help='Explicit provider JSON config; credentials remain environment references')
     args = parser.parse_args()
     try:
         from mcp.server.fastmcp import FastMCP
@@ -52,6 +53,14 @@ def main():
     def photo_retrieve(text: str, top_k: int = 30, parent_id: str | None = None, model: str = 'embeddinggemma-2:latest') -> dict:
         """Rank image/text candidates from the local Ollama index. This does not prove semantic matches."""
         return dispatch(args.state, 'retrieve', {'text': text, 'top_k': top_k, 'parent_id': parent_id, 'model': model})
+
+    @mcp.tool()
+    def photo_enrich(result_set_id: str, condition: str) -> dict:
+        """Review a criterion only within a selected result, using the host-configured vision provider. May take time."""
+        if not args.vision_config:
+            from .service import failure
+            return failure('missing_capability', 'Start the server with --vision-config to enable scoped visual review')
+        return dispatch(args.state, 'review', {'result_set_id': result_set_id, 'condition': condition, 'config': args.vision_config})
 
     mcp.run(transport='stdio')
 

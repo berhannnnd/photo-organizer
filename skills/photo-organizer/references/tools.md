@@ -64,8 +64,12 @@ Overlap: `error` (ask), `first` (explicit precedence), `multi` (all matching gro
 Unknown rule judgments enter `needs-review`, and proven nonmatches enter `unclassified`.
 Counts distinguish selected photos from expanded memberships.
 
-Optional host-supplied `photo_enrich(result_set_id, condition)` can evaluate a new
-criterion using the host's configured vision provider. This is not a default MCP tool;
-the host must explicitly supply it. CLI equivalent: `enrich --config CONFIG --condition
+`photo_enrich(result_set_id, condition)` can evaluate a new
+criterion using the host's configured vision provider. Start the MCP server with
+`--vision-config /absolute/provider.json`; without this option it reports missing capability. CLI equivalent: `enrich --config CONFIG --condition
 CRITERION --result-set-id ID`. Subsequent search uses `semantic: CRITERION` inside the
 same parent scope. This is needed when negative/relational facts cannot be proven by tags.
+
+`call describe-index` embeds current visual descriptions in the same model space. Default
+retrieval uses reciprocal-rank fusion only when both channels cover the selected scope;
+otherwise it explicitly reports image-only ranking and description coverage.

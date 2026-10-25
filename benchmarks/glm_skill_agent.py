@@ -68,7 +68,8 @@ def run_case(state,provider,case,output_root,trace_path):
                 elif name=='photo_enrich':
                     result=dispatch(state,'results',{'result_id':args['result_set_id'],'limit':1})
                     if result['status']!='completed' or result['data']['total']>100: raise ValueError('experiment permits <=100 scoped visual reviews')
-                    value={'status':'completed','data':enrich(state,provider,args['condition'],workers=2,result_set_id=args['result_set_id'])}
+                    judged=enrich(state,provider,args['condition'],workers=1,result_set_id=args['result_set_id'])
+                    value={'status':'partial_failed' if judged['errors'] else 'completed','data':judged}
                 else:
                     operation={'photo_capabilities':'capabilities','photo_status':'status','photo_search':'search','photo_retrieve':'retrieve','photo_results':'results','photo_plan':'plan','photo_apply':'apply'}[name]
                     if name=='photo_plan' and args.get('mode','album')!='album':

@@ -7,7 +7,7 @@ from .planning import plan
 from .execution import apply
 
 API_VERSION = '1'
-OPERATIONS = ('capabilities', 'status', 'scan', 'search', 'results', 'plan', 'apply', 'embed-index', 'describe-index', 'retrieve')
+OPERATIONS = ('capabilities', 'status', 'scan', 'search', 'results', 'plan', 'apply', 'embed-index', 'describe-index', 'retrieve', 'review')
 
 
 def dispatch(state, operation, arguments):
@@ -30,6 +30,12 @@ def dispatch(state, operation, arguments):
         elif operation in ('embed-index','describe-index','retrieve'):
             from . import embeddings
             data = {'embed-index':embeddings.index,'describe-index':embeddings.index_descriptions,'retrieve':embeddings.search}[operation](state, **arguments)
+        elif operation == 'review':
+            from .provider import Provider
+            from .semantic import enrich
+            if set(arguments)!={'result_set_id','condition','config'}: raise ValueError('review requires result_set_id, condition and config')
+            provider=Provider.from_config(arguments['config'])
+            data=enrich(state,provider,arguments['condition'],workers=2,result_set_id=arguments['result_set_id'])
         elif operation == 'scan': data = scan(state, **arguments)
         elif operation == 'search': data = create(state, **arguments)
         elif operation == 'results': data = page(state, **arguments)
