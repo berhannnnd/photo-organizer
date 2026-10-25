@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/photo-organizer-logo.png" alt="Photo Organizer — photos in an organizing tray" width="160" height="160">
+
 # Photo Organizer
 
 **Give your agent the tools to find, group, and export your photos.**

@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/photo-organizer-logo.png" alt="Photo Organizer — 收纳照片的整理盒" width="160" height="160">
+
 # Photo Organizer
 
 **让你的智能体帮你找照片、分组，并整理导出。**
