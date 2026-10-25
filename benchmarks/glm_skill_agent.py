@@ -6,9 +6,9 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
-from photo_organizer.provider import Provider
-from photo_organizer.service import dispatch
-from photo_organizer.semantic import enrich
+from photo_organizer.vision.provider import Provider
+from photo_organizer.interfaces.service import dispatch
+from photo_organizer.vision.semantic import enrich
 
 
 def tool(name, description, properties, required=()):

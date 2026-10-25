@@ -3,7 +3,7 @@ import argparse
 import json
 from pathlib import Path
 from PIL import Image,ImageOps,ImageDraw
-from photo_organizer.embeddings import search
+from photo_organizer.search.embeddings import search
 
 QUERIES=[('cat','一只猫'),('meal','人们围坐在一起吃饭'),('building','建筑物的外立面'),('document','文字密集的文档或扫描页'),('mountain_lake','有山和湖泊的自然风景')]
 

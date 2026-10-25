@@ -12,14 +12,22 @@ requires-python = ">=3.11"
 dependencies = ["Pillow>=11,<14"]
 [project.optional-dependencies]
 mcp = ["mcp>=1.26,<2"]
-dev = ["build>=1.2,<2"]
+dev = ["build>=1.2,<2", "ruff>=0.14,<1"]
 
 [project.scripts]
-photo-organizer = "photo_organizer.cli:main"
-photo-organizer-mcp = "photo_organizer.mcp_server:main"
+photo-organizer = "photo_organizer.interfaces.cli:main"
+photo-organizer-mcp = "photo_organizer.interfaces.mcp_server:main"
 [tool.setuptools.packages.find]
 where = ["src"]
+namespaces = false
 
 [tool.setuptools.data-files]
 "share/photo-organizer/skills/photo-organizer" = ["skills/photo-organizer/SKILL.md"]
 "share/photo-organizer/skills/photo-organizer/references" = ["skills/photo-organizer/references/tools.md"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
