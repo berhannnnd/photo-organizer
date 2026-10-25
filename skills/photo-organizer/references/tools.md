@@ -42,3 +42,30 @@ Config fields: `protocol: anthropic`, exact HTTPS `endpoint`, `model`, `api_key_
 Only read the named environment variable. Larger batches follow actual user scope and budget.
 Missing vision still permits metadata search and non-destructive export.
 The optional legacy CC Switch import is not required for installation or ordinary use.
+
+
+## Image/text retrieval and composable grouping
+
+`photo_retrieve(text, top_k=30, parent_id=null, model="embeddinggemma-2:latest")`
+returns a persistent ranked candidate set. CLI operation: `retrieve`. Build the local
+index first with `call embed-index`; it never downloads a model and binds vectors
+to the exact installed artifact digest. Local query encoding is still a model call;
+repeated identical queries reuse the versioned vector cache.
+
+Candidate sets require `accept_candidates: true` in plan specs when the user has
+explicitly requested organization of candidates. Do not portray these as verified
+matches. Refining them inherits candidate status and cannot expand their scope.
+
+`levels` replaces legacy `group_by` and `groups`, supports up to eight levels:
+`[{"field":"year"},{"field":"category"},{"field":"orientation"}]`.
+Fields: `year`, `month`, `category`, `orientation`, `none`.
+A rules level: `{"rules":[{"name":"Cats","where":{"all_tags":["cat"]}}],"overlap":"error"}`.
+Overlap: `error` (ask), `first` (explicit precedence), `multi` (all matching groups).
+Unknown rule judgments enter `needs-review`, and proven nonmatches enter `unclassified`.
+Counts distinguish selected photos from expanded memberships.
+
+Optional host-supplied `photo_enrich(result_set_id, condition)` can evaluate a new
+criterion using the host's configured vision provider. This is not a default MCP tool;
+the host must explicitly supply it. CLI equivalent: `enrich --config CONFIG --condition
+CRITERION --result-set-id ID`. Subsequent search uses `semantic: CRITERION` inside the
+same parent scope. This is needed when negative/relational facts cannot be proven by tags.

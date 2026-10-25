@@ -2,12 +2,15 @@
 import concurrent.futures
 import json
 import time
+import sys
+import itertools
+from pathlib import Path
 from .catalog import connect,writer_lock,report
 from .provider import ProviderError
 
 def index(state,provider,limit=None,workers=3,reindex=False):
     start=time.perf_counter()
-    with writer_lock(state),connect(state) as c:
+    with writer_lock(Path(state)/'vision-lock'),connect(state) as c:
         versions={r[0] for r in c.execute("SELECT DISTINCT vision_version FROM assets WHERE vision_state='complete'")}
         if versions-{provider.version} and not reindex: raise ValueError('model/prompt changed; use --reindex explicitly')
         if reindex:
@@ -18,8 +21,13 @@ def index(state,provider,limit=None,workers=3,reindex=False):
             except Exception as e: return r['hash'],None,str(e)[:200] if isinstance(e,ProviderError) else type(e).__name__
         completed=failed=0; usage={}; image_bytes=0
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
-            futures=[pool.submit(run,r) for r in rows]
-            for future in concurrent.futures.as_completed(futures):
+            pending=iter(rows)
+            futures={pool.submit(run,r) for r in itertools.islice(pending,workers)}
+            while futures:
+                done,_=concurrent.futures.wait(futures,return_when=concurrent.futures.FIRST_COMPLETED)
+                future=next(iter(done)); futures.remove(future)
+                row=next(pending,None)
+                if row is not None: futures.add(pool.submit(run,row))
                 sha,result,error=future.result()
                 with c:
                     if error:
@@ -33,5 +41,5 @@ def index(state,provider,limit=None,workers=3,reindex=False):
                         for k,v in metrics['usage'].items():
                             if isinstance(v,(int,float)): usage[k]=usage.get(k,0)+v
                 if (completed+failed)%25==0:
-                    print(json.dumps({'progress':completed+failed,'total':len(rows),'completed':completed,'failed':failed}),flush=True)
+                    print(json.dumps({'progress':completed+failed,'total':len(rows),'completed':completed,'failed':failed}),file=sys.stderr,flush=True)
         return {**report(c),'completed_now':completed,'failed_now':failed,'seconds':time.perf_counter()-start,'usage':usage,'image_bytes':image_bytes,'provider':provider.provider_id,'model':provider.model,'endpoint':provider.url}

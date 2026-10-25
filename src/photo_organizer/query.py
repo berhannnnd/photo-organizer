@@ -28,6 +28,7 @@ def search(c, rule, limit=50, offset=0):
             'scope_note': 'Indexed evidence only; unknown and unanalyzed are not negative matches.'}
 
 
-def semantic_coverage(c, text):
+def semantic_coverage(c, text, result_set_id=None):
     key = condition_key(text)
-    return dict(c.execute("SELECT COALESCE(j.verdict,'not_indexed'),count(*) FROM files f LEFT JOIN judgments j ON j.hash=f.hash AND j.condition_id=? AND j.version=(SELECT version FROM conditions WHERE id=?) WHERE f.present=1 GROUP BY COALESCE(j.verdict,'not_indexed')", (key, key)).fetchall())
+    scope=" AND f.id IN(SELECT file_id FROM result_members WHERE result_id=? AND verdict IN ('matched','candidate'))" if result_set_id else ''
+    return dict(c.execute("SELECT COALESCE(j.verdict,'not_indexed'),count(*) FROM files f LEFT JOIN judgments j ON j.hash=f.hash AND j.condition_id=? AND j.version=(SELECT version FROM conditions WHERE id=?) WHERE f.present=1"+scope+" GROUP BY COALESCE(j.verdict,'not_indexed')", (key,key,result_set_id) if result_set_id else (key,key)).fetchall())

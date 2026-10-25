@@ -18,6 +18,11 @@ CREATE INDEX IF NOT EXISTS result_page ON result_members(result_id,verdict,file_
 
 def initialize(c):
     c.executescript(SCHEMA)
+    if "score" not in {r[1] for r in c.execute("PRAGMA table_info(result_members)")}:
+        with c:
+            c.execute("BEGIN IMMEDIATE")
+            if "score" not in {r[1] for r in c.execute("PRAGMA table_info(result_members)")}:
+                c.execute("ALTER TABLE result_members ADD COLUMN score REAL")
 
 
 def require(c, result_id):
@@ -28,7 +33,7 @@ def require(c, result_id):
 
 def stale_count(c, result_id):
     return c.execute('''SELECT count(*) FROM result_members m LEFT JOIN files f ON f.id=m.file_id
-        WHERE m.result_id=? AND m.verdict='matched'
+        WHERE m.result_id=? AND m.verdict IN ('matched','candidate')
         AND (f.id IS NULL OR f.present!=1 OR f.error IS NOT NULL OR f.hash IS NOT m.hash)''', (result_id,)).fetchone()[0]
 
 
@@ -47,44 +52,53 @@ def create(state, rule, parent_id=None):
             scope = ''
             scope_params = []
             if parent_id:
-                scope = " AND f.id IN (SELECT file_id FROM result_members WHERE result_id=? AND verdict='matched')"
+                scope = " AND f.id IN (SELECT file_id FROM result_members WHERE result_id=? AND verdict IN ('matched','candidate'))"
                 scope_params.append(parent_id)
             rows = c.execute("SELECT f.id,f.path,f.hash,CASE WHEN f.error IS NOT NULL THEN 'error' WHEN (" + sql + ") THEN 'matched' WHEN NOT (" + sql + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1" + scope + ' ORDER BY f.id', params + params + scope_params).fetchall()
-            counts = {}
+            candidate_parent = bool(parent_id and 'candidate' in json.loads(require(c,parent_id)['counts']))
+            rows = [dict(r) for r in rows]
+            if candidate_parent:
+                for r in rows:
+                    if r['verdict']=='matched': r['verdict']='candidate'
+            scores = {r['file_id']:r['score'] for r in c.execute('SELECT file_id,score FROM result_members WHERE result_id=?',(parent_id,))} if parent_id else {}
+            counts = {'candidate':0} if candidate_parent else {}
             for row in rows: counts[row['verdict']] = counts.get(row['verdict'], 0) + 1
             result_id = uuid.uuid4().hex
             c.execute('INSERT INTO result_sets VALUES(?,?,?,?,?)', (result_id, datetime.datetime.now(datetime.timezone.utc).isoformat(), parent_id, encoded, json.dumps(counts)))
-            c.executemany('INSERT INTO result_members VALUES(?,?,?,?,?)', [(result_id, r['id'], r['hash'], r['path'], r['verdict']) for r in rows])
+            c.executemany('INSERT INTO result_members(result_id,file_id,hash,path,verdict,score) VALUES(?,?,?,?,?,?)', [(result_id, r['id'], r['hash'], r['path'], r['verdict'], scores.get(r['id'])) for r in rows])
     return page(state, result_id)
 
 
-def page(state, result_id, limit=50, offset=0, verdict='matched'):
+def page(state, result_id, limit=50, offset=0, verdict=None):
     if type(limit) is not int or type(offset) is not int or not 1 <= limit <= 1000 or offset < 0:
         raise ValueError('invalid pagination')
-    if verdict not in ('matched', 'not_matched', 'unknown_or_unanalyzed', 'error'):
+    if verdict not in (None, 'candidate', 'matched', 'not_matched', 'unknown_or_unanalyzed', 'error'):
         raise ValueError('invalid verdict')
     with connect(state) as c:
         initialize(c)
         c.execute('BEGIN')
         result = require(c, result_id)
         counts = json.loads(result['counts'])
-        rows = c.execute('''SELECT m.file_id AS id,m.hash,m.path,m.verdict,f.path AS current_path,
+        if verdict is None: verdict='candidate' if 'candidate' in counts else 'matched'
+        rows = c.execute('''SELECT m.file_id AS id,m.hash,m.path,m.verdict,m.score,f.path AS current_path,a.caption,a.category,a.taken,a.vision_version AS observation_version,
             CASE WHEN f.id IS NULL OR f.present!=1 OR f.error IS NOT NULL OR f.hash IS NOT m.hash THEN 1 ELSE 0 END AS stale
-            FROM result_members m LEFT JOIN files f ON f.id=m.file_id
-            WHERE m.result_id=? AND m.verdict=? ORDER BY m.file_id LIMIT ? OFFSET ?''', (result_id, verdict, limit, offset)).fetchall()
+            FROM result_members m LEFT JOIN files f ON f.id=m.file_id LEFT JOIN assets a ON a.hash=m.hash
+            WHERE m.result_id=? AND m.verdict=? ORDER BY m.score DESC,m.file_id LIMIT ? OFFSET ?''', (result_id, verdict, limit, offset)).fetchall()
         total = counts.get(verdict, 0)
         return {'result_set_id': result_id, 'parent_id': result['parent_id'], 'created': result['created'],
-                'rule': json.loads(result['rule']), 'judgments': counts, 'total': total,
+                'selection_kind': 'candidates' if 'candidate' in counts else 'evidence_matches', 'rule': json.loads(result['rule']), 'judgments': counts, 'total': total,
                 'items': [dict(r) for r in rows], 'offset': offset, 'limit': limit,
                 'next_offset': offset + limit if offset + limit < total else None,
                 'stale_members': stale_count(c, result_id), 'model_calls': 0,
                 'freshness': 'relative_to_last_scan; run scan before operations requiring current files'}
 
 
-def select_snapshot(c, result_id):
+def select_snapshot(c, result_id, accept_candidates=False):
     initialize(c)
-    require(c, result_id)
+    row=require(c, result_id)
+    if 'candidate' in json.loads(row['counts']) and not accept_candidates:
+        raise ValueError('candidate set needs review or explicit accept_candidates=true')
     if stale_count(c, result_id): raise ValueError('snapshot has stale members; refresh explicitly')
     return c.execute('''SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state
         FROM result_members m JOIN files f ON f.id=m.file_id JOIN assets a ON a.hash=m.hash
-        WHERE m.result_id=? AND m.verdict='matched' ORDER BY f.id''', (result_id,)).fetchall()
+        WHERE m.result_id=? AND m.verdict IN ('matched','candidate') ORDER BY f.id''', (result_id,)).fetchall()

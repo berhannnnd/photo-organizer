@@ -1,0 +1,44 @@
+[
+  {
+    "id":"A1_full_library",
+    "scenario":"direct organization",
+    "prompt":"把这1000张照片全部做成逻辑相册，先按已经识别的画面类型，再按拍摄年份，再按横版/竖版/方形分三层。没有拍摄日期就标日期未知，没有可靠类型就待确认。不要复制原图。请实际执行，报告唯一照片数、成员数和未确认项，不要只给方案。"
+  },
+  {
+    "id":"A2_semantic_direct",
+    "scenario":"semantic search and direct organization",
+    "prompt":"找20张猫相关的候选照片，本次接受语义候选，不要求找全或逐张重新看图。直接按横版/竖版/方形分文件夹，复制到 ${OUTPUT}/cats。不要改原图；我已授权这次复制，请实际完成并说明这些仍是候选。"
+  },
+  {
+    "id":"B1_result_organization",
+    "scenario":"organize a search result",
+    "prompt":"只整理结果集 ${LANDSCAPE} 的所有候选，不要重搜也不要只整理第一页。按拍摄年份、画面类型、横竖方向分三层，导出长边不超过800像素的JPEG副本到 ${OUTPUT}/landscape。我接受这个集合的候选身份，没有日期单独标未知。实际执行并返回回执。"
+  },
+  {
+    "id":"B2_overlap",
+    "scenario":"custom grouping with overlap",
+    "prompt":"对结果集 ${ALL} 做逻辑相册。第一层是动物照片和横版照片，动物按已有category=animal判断，横版按尺寸判断；同一张同时满足就两边都收。第二层按拍摄年份，无日期保持未知。不满足的留其他，证据不足待确认。请实际执行，分别报告唯一照片数和相册成员数。"
+  },
+  {
+    "id":"C1_refine",
+    "scenario":"second-stage filtering",
+    "prompt":"只在结果集 ${LANDSCAPE} 这30张候选里再筛选横版且画面里没有可辨认人物的照片。没有person标签不算证据，必要时只复核这个范围，不能扩大到全库。保存筛选结果，报告不确定项，不做文件操作。"
+  },
+  {
+    "id":"C2_scope_recovery",
+    "scenario":"relax an earlier filter",
+    "prompt":"结果集 ${LANDSCAPE_HORIZONTAL} 是从最初30张候选里筛了横版得到的。现在撤掉横版条件，恢复最初那30张候选的范围，再挑出竖版；不要去全库重搜。保存结果，不做文件操作。"
+  },
+  {
+    "id":"D1_subjective",
+    "scenario":"general ambiguity and exploration",
+    "prompt":"帮我找一些有意思的照片。",
+    "replies":["我更喜欢奇特的画面或少见的构图，先给12张多样候选即可，不要求全找出来，不要做任何文件整理。"]
+  },
+  {
+    "id":"D2_missing_facts",
+    "scenario":"missing date and identity evidence",
+    "prompt":"把去年和小王去杭州的照片找出来按日期整理。",
+    "replies":["我没有人物标注，也没有可以补充的拍摄时间或地点信息。这次先不要执行整理，告诉我缺什么就好。"]
+  }
+]

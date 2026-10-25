@@ -34,7 +34,7 @@ def main():
         return dispatch(args.state, 'search', {'rule': rule, 'parent_id': parent_id})
 
     @mcp.tool()
-    def photo_results(result_id: str, limit: int = 50, offset: int = 0, verdict: str = 'matched') -> dict:
+    def photo_results(result_id: str, limit: int = 50, offset: int = 0, verdict: str | None = None) -> dict:
         """Read a snapshot page; pagination never changes membership. Inspect stale_members before planning."""
         return dispatch(args.state, 'results', {'result_id': result_id, 'limit': limit, 'offset': offset, 'verdict': verdict})
 
@@ -47,6 +47,11 @@ def main():
     def photo_apply(plan_id: str) -> dict:
         """Execute an authorized plan, preserving originals and refusing destination overwrite."""
         return dispatch(args.state, 'apply', {'plan_id': plan_id})
+
+    @mcp.tool()
+    def photo_retrieve(text: str, top_k: int = 30, parent_id: str | None = None, model: str = 'embeddinggemma-2:latest') -> dict:
+        """Rank image/text candidates from the local Ollama index. This does not prove semantic matches."""
+        return dispatch(args.state, 'retrieve', {'text': text, 'top_k': top_k, 'parent_id': parent_id, 'model': model})
 
     mcp.run(transport='stdio')
 

@@ -22,7 +22,8 @@ def main():
     for command in ('index','enrich'):
         p=sub.add_parser(command); p.add_argument('--config'); p.add_argument('--cc-db'); p.add_argument('--provider-id'); p.add_argument('--app',default='claude'); p.add_argument('--model'); p.add_argument('--limit',type=int); p.add_argument('--workers',type=int,default=4)
         if command=='index': p.add_argument('--reindex',action='store_true')
-        else: p.add_argument('--condition',required=True)
+        else:
+            p.add_argument('--condition',required=True); p.add_argument('--result-set-id')
     p=sub.add_parser('search'); p.add_argument('--rule',required=True); p.add_argument('--limit',type=int,default=50); p.add_argument('--offset',type=int,default=0)
     p=sub.add_parser('plan'); p.add_argument('--spec',required=True); p.add_argument('--mode',choices=['album','copy','compress'],default='album'); p.add_argument('--target')
     p=sub.add_parser('apply'); p.add_argument('plan_id')
@@ -46,7 +47,7 @@ def main():
                 if not all((args.cc_db,args.provider_id,args.model)): raise ValueError('provide --config, or explicit CC Switch db/provider/model')
                 provider=Provider(args.cc_db,args.provider_id,args.model,args.app)
             if args.command=='index': result=index(args.state,provider,args.limit,args.workers,args.reindex)
-            else: result=enrich(args.state,provider,args.condition,args.limit,args.workers)
+            else: result=enrich(args.state,provider,args.condition,args.limit,args.workers,args.result_set_id)
         elif args.command=='search':
             with connect(args.state) as c: result=search(c,json.loads(args.rule),args.limit,args.offset)
         elif args.command=='plan': result=plan(args.state,json.loads(args.spec),args.target,args.mode)

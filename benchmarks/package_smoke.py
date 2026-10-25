@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 repo = Path(__file__).resolve().parents[1]
-wheel = repo / 'dist' / 'photo_organizer-0.2.0a1-py3-none-any.whl'
+wheel = repo / 'dist' / 'photo_organizer-0.2.0a2-py3-none-any.whl'
 start = time.perf_counter()
 with tempfile.TemporaryDirectory(prefix='photo-organizer-install-') as tmp:
     base = Path(tmp)

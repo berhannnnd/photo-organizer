@@ -79,9 +79,10 @@ photo-organizer --state /absolute/library-state index --config /absolute/provide
 ```
 
 This sends derived images to the configured provider. Start with an authorized small
-batch and inspect evidence. It does not establish an embedding index. Open semantic
-vector retrieval, same-person grouping, advanced multi-level rules and durable
-background jobs are still pending. Missing tags never prove that a subject is absent.
+batch and inspect evidence. Build a separate local vector index with `call embed-index`, then the observation
+text index with `call describe-index`; `call retrieve` returns ranked candidates.
+Same-person grouping and durable background jobs are still pending. Multi-level
+grouping is available through `levels` (see the tool reference). Missing tags never prove that a subject is absent.
 
 ## Development and evidence
 

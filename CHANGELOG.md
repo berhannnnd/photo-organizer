@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0a2 — unreleased
+
+- Add digest-bound local Ollama image/text index, cached queries and optional image/description rank fusion.
+- Keep retrieved candidates distinct from verified matches and preserve candidate provenance through refinement.
+- Support up to eight grouping levels and explicit unique/priority/multiple membership policies.
+- Allow scoped GLM condition review without revisiting unrelated images.
+- Release the global library lock during visual indexing; bound in-flight requests.
+- Add a real GLM tool-calling Skill test harness and fixed scenario definitions.
+
 ## 0.2.0a1 — unreleased
 
 - Add shared JSON service operations and optional MCP stdio tools.

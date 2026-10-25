@@ -7,7 +7,7 @@ from .planning import plan
 from .execution import apply
 
 API_VERSION = '1'
-OPERATIONS = ('capabilities', 'status', 'scan', 'search', 'results', 'plan', 'apply')
+OPERATIONS = ('capabilities', 'status', 'scan', 'search', 'results', 'plan', 'apply', 'embed-index', 'describe-index', 'retrieve')
 
 
 def dispatch(state, operation, arguments):
@@ -18,15 +18,18 @@ def dispatch(state, operation, arguments):
             if arguments: raise ValueError('capabilities takes no arguments')
             data = {'api_version': API_VERSION, 'platform': platform.system(),
                     'operations': list(OPERATIONS), 'outputs': ['album', 'copy', 'compress'],
-                    'query': ['metadata', 'indexed_facts', 'and', 'or', 'not', 'saved_semantic_judgments'],
+                    'query': ['metadata', 'indexed_facts', 'and', 'or', 'not', 'saved_semantic_judgments', 'image_text_candidates'],
                     'result_snapshots': True, 'models_required_for_metadata': False,
                     'vision_protocols': ['anthropic'],
                     'limitations': ['POSIX only; Windows unsupported', 'synchronous tasks; persistent job scheduler pending',
-                                    'unknown and unanalyzed counts currently combined', 'single grouping level plus month hierarchy',
-                                    'embedding, face clustering, watcher and automatic grouping pending']}
+                                    'unknown and unanalyzed counts currently combined', 'user corrections and naming templates pending',
+                                    'face clustering, watcher and automatic grouping pending']}
         elif operation == 'status':
             if arguments: raise ValueError('status takes no arguments')
             with connect(state) as c: data = report(c)
+        elif operation in ('embed-index','describe-index','retrieve'):
+            from . import embeddings
+            data = {'embed-index':embeddings.index,'describe-index':embeddings.index_descriptions,'retrieve':embeddings.search}[operation](state, **arguments)
         elif operation == 'scan': data = scan(state, **arguments)
         elif operation == 'search': data = create(state, **arguments)
         elif operation == 'results': data = page(state, **arguments)

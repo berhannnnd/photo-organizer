@@ -52,7 +52,10 @@ def predicate(rule, depth=0):
     for key, expr in [('caption_text', 'instr(lower(a.caption),lower(?))>0'), ('category', 'a.category=?')]:
         if key in rule:
             if not isinstance(rule[key], str) or not rule[key].strip(): raise ValueError('invalid ' + key)
-            clauses.append("CASE WHEN a.vision_state='complete' AND (" + expr + ') THEN 1 ELSE NULL END')
+            if key == 'category':
+                clauses.append("CASE WHEN a.vision_state='complete' THEN (" + expr + ') ELSE NULL END')
+            else:
+                clauses.append("CASE WHEN a.vision_state='complete' AND (" + expr + ') THEN 1 ELSE NULL END')
             args.append(rule[key])
     if 'orientation' in rule:
         op = {'landscape': '>', 'portrait': '<', 'square': '='}.get(rule['orientation'])
