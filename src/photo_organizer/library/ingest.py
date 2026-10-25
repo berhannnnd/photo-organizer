@@ -9,12 +9,14 @@ import time
 import warnings
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image
 
+from photo_organizer.library.imaging import PREPROCESSING, normalized
+from photo_organizer.runtime.context import checkpoint
 from photo_organizer.storage.catalog import connect, report, writer_lock
 from photo_organizer.storage.filesystem import read_source
 
-PREP = "pillow-orient-rgb-1280-q82-v1"
+PREP = PREPROCESSING
 Image.MAX_IMAGE_PIXELS = 60_000_000
 
 
@@ -66,16 +68,9 @@ def prepare(path, state):
                         longitude = degrees(gps[4]) * (-1 if gps.get(3) == "W" else 1)
                 except (KeyError, TypeError, ValueError, ZeroDivisionError):
                     pass
-                im = ImageOps.exif_transpose(im)
+                im = normalized(im)
                 width, height = im.size
                 im.thumbnail((1280, 1280))
-                if im.mode in ("RGBA", "LA") or "transparency" in im.info:
-                    rgba = im.convert("RGBA")
-                    rgb = Image.new("RGB", rgba.size, "white")
-                    rgb.paste(rgba, mask=rgba.getchannel("A"))
-                    im = rgb
-                else:
-                    im = im.convert("RGB")
                 target = Path(state) / "derivatives" / PREP / (sha + ".jpg")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if not target.exists():
@@ -105,6 +100,8 @@ def prepare(path, state):
 
 
 def scan(state, root, workers=4, verify=False):
+    if type(workers) is not int or not 1 <= workers <= 16 or type(verify) is not bool:
+        raise ValueError("workers must be 1..16 and verify must be boolean")
     start = time.perf_counter()
     state = Path(state).resolve()
     root = Path(os.path.abspath(root))
@@ -114,6 +111,11 @@ def scan(state, root, workers=4, verify=False):
         raise ValueError("state must be outside source tree")
     with writer_lock(state), connect(state) as c:
         initial = root.stat()
+        for existing in c.execute("SELECT DISTINCT root FROM files"):
+            other = Path(existing[0])
+            if root != other and (root in other.parents or other in root.parents):
+                raise ValueError("overlapping source roots: synchronize the existing root instead")
+        directory_versions = {}
         paths = []
         exports = [
             Path(r[0])
@@ -125,6 +127,8 @@ def scan(state, root, workers=4, verify=False):
             raise error
 
         for current, dirs, files in os.walk(root, followlinks=False, onerror=fail):
+            checkpoint()
+            directory_versions[current] = Path(current).stat().st_mtime_ns
             for name in list(dirs):
                 p = Path(current) / name
                 if p in exports and not explicitly_importing_export:
@@ -143,6 +147,7 @@ def scan(state, root, workers=4, verify=False):
         }
         tasks = []
         cached = 0
+        cached_ids = []
         seen = {str(p) for p in paths}
         missing = [r for p, r in previous.items() if p not in seen]
         for p in paths:
@@ -160,61 +165,79 @@ def scan(state, root, workers=4, verify=False):
                 and Path(old["derivative"]).is_file()
             ):
                 cached += 1
-                c.execute("UPDATE files SET present=1 WHERE id=?", (old["id"],))
+                cached_ids.append(old["id"])
             else:
                 tasks.append(p)
         # Commit changes only after a successful complete scan. WAL readers see the prior revision.
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+            prepared = []
             for path, result in zip(tasks, pool.map(lambda p: prepare(p, state), tasks)):
-                if not result["error"]:
-                    c.execute(
-                        "INSERT INTO assets(hash,width,height,taken,date_source,derivative,prep_version) VALUES(?,?,?,?,?,?,?) ON CONFLICT(hash) DO UPDATE SET width=excluded.width,height=excluded.height,taken=excluded.taken,date_source=excluded.date_source,derivative=excluded.derivative,prep_version=excluded.prep_version",
-                        (
-                            result["hash"],
-                            result["width"],
-                            result["height"],
-                            result["taken"],
-                            "exif" if result["taken"] else None,
-                            result["derivative"],
-                            PREP,
-                        ),
-                    )
-                    c.execute(
-                        "UPDATE assets SET latitude=?,longitude=?,timezone=? WHERE hash=?",
-                        (
-                            result["latitude"],
-                            result["longitude"],
-                            result["timezone"],
-                            result["hash"],
-                        ),
-                    )
-                    if str(path) not in previous:
-                        matches = [
-                            r
-                            for r in missing
-                            if r["device"] == result["device"]
-                            and r["inode"] == result["inode"]
-                            and r["hash"] == result["hash"]
-                        ]
-                        if len(matches) == 1:
-                            c.execute(
-                                "UPDATE files SET path=? WHERE id=?", (str(path), matches[0]["id"])
-                            )
-                            missing.remove(matches[0])
+                checkpoint()
+                prepared.append((path, result))
+        for directory, version in directory_versions.items():
+            if Path(directory).stat().st_mtime_ns != version:
+                raise ValueError("source tree changed during scan; retry synchronization")
+        for path, result in prepared:
+            if not result["error"]:
+                current = path.stat()
+                if (current.st_size, current.st_mtime_ns, current.st_ino) != (
+                    result["size"],
+                    result["mtime_ns"],
+                    result["inode"],
+                ):
+                    raise ValueError("source changed after preprocessing; retry synchronization")
+        checkpoint()
+        c.executemany("UPDATE files SET present=1 WHERE id=?", [(fid,) for fid in cached_ids])
+        for path, result in prepared:
+            if not result["error"]:
                 c.execute(
-                    "INSERT INTO files(root,path,hash,size,mtime_ns,error,device,inode,imported_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET hash=excluded.hash,size=excluded.size,mtime_ns=excluded.mtime_ns,error=excluded.error,present=1,device=excluded.device,inode=excluded.inode",
+                    "INSERT INTO assets(hash,width,height,taken,date_source,derivative,prep_version) VALUES(?,?,?,?,?,?,?) ON CONFLICT(hash) DO UPDATE SET width=excluded.width,height=excluded.height,taken=excluded.taken,date_source=excluded.date_source,derivative=excluded.derivative,prep_version=excluded.prep_version",
                     (
-                        str(root),
-                        str(path),
-                        result.get("hash"),
-                        result.get("size"),
-                        result.get("mtime_ns"),
-                        result["error"],
-                        result.get("device"),
-                        result.get("inode"),
-                        datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        result["hash"],
+                        result["width"],
+                        result["height"],
+                        result["taken"],
+                        "exif" if result["taken"] else None,
+                        result["derivative"],
+                        PREP,
                     ),
                 )
+                c.execute(
+                    "UPDATE assets SET latitude=?,longitude=?,timezone=? WHERE hash=?",
+                    (
+                        result["latitude"],
+                        result["longitude"],
+                        result["timezone"],
+                        result["hash"],
+                    ),
+                )
+                if str(path) not in previous:
+                    matches = [
+                        r
+                        for r in missing
+                        if r["device"] == result["device"]
+                        and r["inode"] == result["inode"]
+                        and r["hash"] == result["hash"]
+                    ]
+                    if len(matches) == 1:
+                        c.execute(
+                            "UPDATE files SET path=? WHERE id=?", (str(path), matches[0]["id"])
+                        )
+                        missing.remove(matches[0])
+            c.execute(
+                "INSERT INTO files(root,path,hash,size,mtime_ns,error,device,inode,imported_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET hash=excluded.hash,size=excluded.size,mtime_ns=excluded.mtime_ns,error=excluded.error,present=1,device=excluded.device,inode=excluded.inode",
+                (
+                    str(root),
+                    str(path),
+                    result.get("hash"),
+                    result.get("size"),
+                    result.get("mtime_ns"),
+                    result["error"],
+                    result.get("device"),
+                    result.get("inode"),
+                    datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                ),
+            )
         final = root.stat()
         if (initial.st_dev, initial.st_ino) != (final.st_dev, final.st_ino):
             raise ValueError("source root changed during scan")

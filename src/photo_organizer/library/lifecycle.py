@@ -9,6 +9,7 @@ import time
 import uuid
 from pathlib import Path
 
+from photo_organizer.runtime.admission import JobBoundary
 from photo_organizer.search.selection import now
 from photo_organizer.storage.catalog import connect, writer_lock
 
@@ -29,7 +30,7 @@ def synchronize(state, root, workers=4, verify=False):
         c.execute("UPDATE roots SET last_scan=? WHERE id=?", (sid, r["id"]))
     try:
         result = scan(state, root, workers, verify)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, JobBoundary) as error:
         offline = not Path(root).is_dir()
         with connect(state) as c:
             c.execute(

@@ -10,6 +10,8 @@ from pathlib import Path
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.capabilities.registry import get_config
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.core.paging import page, validate
+from photo_organizer.runtime.context import admit, checkpoint
 from photo_organizer.search.selection import members, now
 from photo_organizer.storage.catalog import connect, writer_lock
 
@@ -35,7 +37,10 @@ def detect(config, path):
                 "dependency_missing",
                 "Install optional opencv-python and provide YuNet/SFace model files",
             ) from None
+        admit(remote=False)
         im = cv2.imread(str(path))
+        if im is None:
+            raise CapabilityError("invalid_image", "OpenCV could not decode input")
         detector = cv2.FaceDetectorYN.create(
             config["detector_path"], "", (im.shape[1], im.shape[0])
         )
@@ -110,7 +115,15 @@ def index_one(state, result_id, row):
             ).encode()
         ).hexdigest()
     space = config.get("space", revision)
+    with connect(state) as c:
+        cached = c.execute(
+            "SELECT payload FROM observations WHERE hash=? AND kind='face_detection' AND version=? ORDER BY created DESC LIMIT 1",
+            (row["hash"], revision),
+        ).fetchone()
+        if cached:
+            return {**json.loads(cached[0]), "cached": True}
     output = detect(config, path)
+    checkpoint()
     if output:
         submit(
             state,
@@ -174,27 +187,42 @@ def cluster(state, space, threshold=0.6):
     }
 
 
-def manage(state, action="list", person_id=None, name=None, face_ids=None, merge_ids=None):
+def manage(
+    state,
+    action="list",
+    person_id=None,
+    name=None,
+    face_ids=None,
+    merge_ids=None,
+    limit=50,
+    offset=0,
+):
+    validate(limit, offset)
     with writer_lock(state), connect(state) as c:
         if action == "list":
-            return {
-                "people": [
-                    dict(r)
-                    for r in c.execute(
-                        "SELECT p.*,count(f.id) AS faces FROM people p JOIN faces f ON p.id=f.person_id GROUP BY p.id ORDER BY p.id LIMIT 200"
-                    )
-                ]
-            }
+            total = c.execute(
+                "SELECT count(*) FROM people p WHERE EXISTS(SELECT 1 FROM faces f WHERE f.person_id=p.id)"
+            ).fetchone()[0]
+            items = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT p.*,count(f.id) AS faces FROM people p JOIN faces f ON p.id=f.person_id GROUP BY p.id ORDER BY p.id LIMIT ? OFFSET ?",
+                    (limit, offset),
+                )
+            ]
+            return page(items, total, limit, offset, "people")
         if action == "faces":
-            return {
-                "faces": [
-                    dict(r)
-                    for r in c.execute(
-                        "SELECT id,hash,space,box,person_id FROM faces WHERE person_id=? ORDER BY id LIMIT 200",
-                        (person_id,),
-                    )
-                ]
-            }
+            total = c.execute(
+                "SELECT count(*) FROM faces WHERE person_id=?", (person_id,)
+            ).fetchone()[0]
+            items = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT id,hash,space,box,person_id FROM faces WHERE person_id=? ORDER BY id LIMIT ? OFFSET ?",
+                    (person_id, limit, offset),
+                )
+            ]
+            return page(items, total, limit, offset, "faces")
         if action not in ("rename", "merge", "assign", "split"):
             raise ValueError("invalid person action")
         if (

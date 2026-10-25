@@ -7,12 +7,11 @@ import json
 import math
 import struct
 import time
-import urllib.error
-import urllib.request
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 
+from photo_organizer.core.errors import CapabilityError
 from photo_organizer.library.ingest import PREP
 from photo_organizer.search import results
 from photo_organizer.storage.catalog import connect, writer_lock
@@ -69,20 +68,11 @@ class Ollama:
         ).hexdigest()
 
     def request(self, path, body=None):
-        req = urllib.request.Request(
-            self.endpoint + path,
-            data=json.dumps(body).encode() if body is not None else None,
-            headers={"Content-Type": "application/json"},
+        from photo_organizer.capabilities.adapters.http import request
+
+        return request(
+            {"protocol": "ollama", "endpoint": self.endpoint, "timeout": 180}, body, path
         )
-        try:
-            with urllib.request.urlopen(req, timeout=180) as r:
-                return json.load(r)
-        except urllib.error.HTTPError as e:
-            code = e.code
-            e.close()
-            raise ValueError("Ollama HTTP " + str(code)) from None
-        except (urllib.error.URLError, TimeoutError):
-            raise ValueError("Ollama unavailable or timed out; no remote fallback") from None
 
     def current_digest(self):
         rows = self.request("/api/tags").get("models", [])
@@ -162,7 +152,7 @@ def index(state, model="embeddinggemma-2:latest", endpoint="http://127.0.0.1:114
                         (provider.space, row["hash"], blob),
                     )
                 completed += 1
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, CapabilityError) as e:
                 errors.append({"hash": row["hash"], "error": str(e)[:200]})
                 if len(errors) >= 3:
                     break
@@ -228,7 +218,7 @@ def index_descriptions(
                         (provider.space, row["hash"], row["vision_version"], text_hash, vector),
                     )
                 completed += 1
-            except (OSError, ValueError) as e:
+            except (OSError, ValueError, CapabilityError) as e:
                 errors.append({"hash": row["hash"], "error": str(e)[:200]})
                 if len(errors) >= 3:
                     break

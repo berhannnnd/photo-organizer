@@ -158,7 +158,7 @@ class CompositionTests(unittest.TestCase):
 
     def test_migration_reopens_and_no_future_version(self):
         with connect(self.state) as c:
-            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 1)
+            self.assertEqual(c.execute("PRAGMA user_version").fetchone()[0], 3)
         with connect(self.state) as c:
             c.execute("PRAGMA user_version=999")
         with self.assertRaises(ValueError):

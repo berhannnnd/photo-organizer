@@ -83,7 +83,15 @@ class Vision:
                 ],
             }
             response = request(self.config, body)
-            text = response.get("choices", [{}])[0].get("message", {}).get("content")
+            choices = response.get("choices")
+            if (
+                not isinstance(choices, list)
+                or not choices
+                or not isinstance(choices[0], dict)
+                or not isinstance(choices[0].get("message"), dict)
+            ):
+                raise CapabilityError("invalid_response", "Missing OpenAI-compatible message")
+            text = choices[0]["message"].get("content")
         elif protocol == "ollama":
             response = request(
                 self.config,
@@ -106,7 +114,10 @@ class Vision:
 
     def label(self, path):
         obj, metrics = self.request(path, PROMPT)
-        validate_label(obj)
+        try:
+            validate_label(obj)
+        except ValueError:
+            raise CapabilityError("invalid_response", "Invalid visual label schema") from None
         return obj, metrics
 
     def judge(self, path, condition):

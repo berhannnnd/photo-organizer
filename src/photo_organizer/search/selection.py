@@ -90,6 +90,17 @@ def save(c, rows, rule, parent_id=None, ctx=None, details=None):
             ),
         ),
     )
+    details = dict(details or {})
+    for row in rows:
+        snapshot = c.execute(
+            "SELECT caption,category,taken,vision_version FROM effective_assets WHERE hash=?",
+            (row["hash"],),
+        ).fetchone()
+        if snapshot:
+            details[row["file_id"]] = {
+                **details.get(row["file_id"], {}),
+                "snapshot": dict(snapshot),
+            }
     if details:
         c.executemany(
             "INSERT INTO result_details VALUES(?,?,?)",
@@ -152,6 +163,9 @@ def choose(state, result_id, ids, mode="keep", source="agent", reason="", verdic
             "selection_reason": reason,
             "explicit_selection": mode != "order",
         }
+        if mode != "order":
+            ctx["unverified_requirements"] = ctx.get("requirements", [])
+            ctx["requirements"] = []
         rid = save(
             c,
             rows,

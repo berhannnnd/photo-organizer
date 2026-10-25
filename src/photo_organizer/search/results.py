@@ -65,7 +65,7 @@ def create(state, rule, parent_id=None):
                 + sql
                 + ") THEN 'matched' WHEN NOT ("
                 + sql
-                + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1 AND NOT EXISTS(SELECT 1 FROM roots rt WHERE rt.path=f.root AND (rt.status='offline' OR rt.enabled=0))"
+                + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END AS verdict FROM files f LEFT JOIN effective_assets a ON a.hash=f.hash WHERE f.present=1 AND NOT EXISTS(SELECT 1 FROM roots rt WHERE rt.path=f.root AND (rt.status='offline' OR rt.enabled=0))"
                 + scope
                 + " ORDER BY f.id",
                 params + params + scope_params,
@@ -99,7 +99,7 @@ def create(state, rule, parent_id=None):
             )
             for r in rows:
                 asset = c.execute(
-                    "SELECT f.id,f.hash,a.vision_state FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.id=?",
+                    "SELECT f.id,f.hash,a.vision_state FROM files f LEFT JOIN effective_assets a ON a.hash=f.hash WHERE f.id=?",
                     (r["id"],),
                 ).fetchone()
                 detail = (
@@ -148,7 +148,7 @@ def page(state, result_id, limit=50, offset=0, verdict=None):
         rows = c.execute(
             """SELECT m.file_id AS id,m.hash,m.path,m.verdict,m.score,f.path AS current_path,a.caption,a.category,a.taken,a.vision_version AS observation_version,
             CASE WHEN f.id IS NULL OR f.present!=1 OR f.error IS NOT NULL OR f.hash IS NOT m.hash THEN 1 ELSE 0 END AS stale
-            FROM result_members m LEFT JOIN files f ON f.id=m.file_id LEFT JOIN assets a ON a.hash=m.hash
+            FROM result_members m LEFT JOIN files f ON f.id=m.file_id LEFT JOIN effective_assets a ON a.hash=m.hash
             WHERE m.result_id=? AND m.verdict=? ORDER BY m.score DESC,m.file_id LIMIT ? OFFSET ?""",
             (result_id, verdict, limit, offset),
         ).fetchall()
@@ -163,13 +163,27 @@ def page(state, result_id, limit=50, offset=0, verdict=None):
                 (result_id, row["id"]),
             ).fetchone()
             item["judgment_detail"] = json.loads(detail[0]) if detail else None
+            snapshot = item["judgment_detail"].get("snapshot") if item["judgment_detail"] else None
+            item["snapshot_evidence"] = snapshot
+            item["evidence_changed"] = bool(
+                snapshot
+                and any(
+                    snapshot.get(k)
+                    != item.get("observation_version" if k == "vision_version" else k)
+                    for k in ("caption", "category", "taken", "vision_version")
+                )
+            )
             enriched.append(item)
         total = counts.get(verdict, 0)
         return {
             "result_set_id": result_id,
             "parent_id": result["parent_id"],
             "created": result["created"],
-            "selection_kind": "candidates" if "candidate" in counts else "evidence_matches",
+            "selection_kind": "candidates"
+            if "candidate" in counts
+            else "explicit_selection"
+            if ctx.get("explicit_selection")
+            else "evidence_matches",
             "rule": json.loads(result["rule"]),
             "judgments": counts,
             "total": total,
@@ -179,6 +193,10 @@ def page(state, result_id, limit=50, offset=0, verdict=None):
             "limit": limit,
             "next_offset": offset + limit if offset + limit < total else None,
             "stale_members": stale_count(c, result_id),
+            "unavailable_members": c.execute(
+                "SELECT count(*) FROM result_members m JOIN files f ON f.id=m.file_id JOIN roots rt ON rt.path=f.root WHERE m.result_id=? AND (rt.status='offline' OR rt.enabled=0)",
+                (result_id,),
+            ).fetchone()[0],
             "model_calls": 0,
             "freshness": "relative_to_last_scan; run scan before operations requiring current files",
         }
@@ -191,9 +209,17 @@ def select_snapshot(c, result_id, accept_candidates=False):
         raise ValueError("candidate set needs review or explicit accept_candidates=true")
     if stale_count(c, result_id):
         raise ValueError("snapshot has stale members; refresh explicitly")
+    unavailable = c.execute(
+        "SELECT count(*) FROM result_members m JOIN files f ON f.id=m.file_id JOIN roots rt ON rt.path=f.root WHERE m.result_id=? AND m.verdict IN ('matched','candidate') AND (rt.status='offline' OR rt.enabled=0)",
+        (result_id,),
+    ).fetchone()[0]
+    if unavailable:
+        raise ValueError(
+            "snapshot contains offline or disabled sources; synchronize or enable them before planning"
+        )
     return c.execute(
         """SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state
-        FROM result_members m JOIN files f ON f.id=m.file_id JOIN assets a ON a.hash=m.hash
+        FROM result_members m JOIN files f ON f.id=m.file_id JOIN effective_assets a ON a.hash=m.hash
         WHERE m.result_id=? AND m.verdict IN ('matched','candidate') ORDER BY f.id""",
         (result_id,),
     ).fetchall()

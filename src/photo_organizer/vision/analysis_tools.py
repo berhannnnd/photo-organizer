@@ -12,6 +12,7 @@ from PIL import Image, ImageFilter, ImageStat
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.capabilities.registry import get_config, vision
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.runtime.context import admit, checkpoint
 from photo_organizer.search.selection import context, members, now, retrieval_context, save
 from photo_organizer.storage.catalog import connect
 
@@ -33,6 +34,7 @@ def ocr_image(state, path, config):
             )
         ):
             raise ValueError("invalid OCR language")
+        admit(remote=False)
         process = subprocess.run(
             [executable, str(path), "stdout", "-l", language, "tsv"],
             capture_output=True,
@@ -151,18 +153,32 @@ def analyze_one(state, row, kind):
     if not asset:
         raise ValueError("missing content")
     if kind == "quality":
-        output = metrics(asset["derivative"])
         version = "quality-v1"
         source = {"kind": "local", "model": "pillow-measurements"}
     elif kind == "ocr":
         config = get_config(state, "ocr")
-        output = ocr_image(state, asset["derivative"], config)
         import hashlib
 
-        version = hashlib.sha256(json.dumps(config, sort_keys=True).encode()).hexdigest()
+        dependencies = {"ocr": config}
+        if config["protocol"] == "vision":
+            dependencies["vision"] = get_config(state, "vision")
+        version = hashlib.sha256(json.dumps(dependencies, sort_keys=True).encode()).hexdigest()
         source = {"kind": "provider", "model": config.get("model", config["protocol"])}
     else:
         raise ValueError("kind must be quality or ocr")
+    with connect(state) as c:
+        cached = c.execute(
+            "SELECT payload FROM observations WHERE hash=? AND kind=? AND version=? ORDER BY created DESC LIMIT 1",
+            (row["hash"], kind, version),
+        ).fetchone()
+        if cached:
+            return {**json.loads(cached[0]), "cached": True}
+    if kind == "quality":
+        admit(remote=False)
+        output = metrics(asset["derivative"])
+    else:
+        output = ocr_image(state, asset["derivative"], config)
+    checkpoint()
     with connect(state) as c:
         c.execute(
             "INSERT INTO observations VALUES(?,?,?,?,?,?,?)",

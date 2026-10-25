@@ -22,7 +22,7 @@ def evaluate(c, row, rule, scope_ids=()):
             }
         )
     for field, value in rule.items():
-        if field in ("and", "or", "not"):
+        if field in ("and", "or", "not", "date_basis"):
             continue
         if field == "semantic":
             key = condition_key(value)
@@ -66,9 +66,20 @@ def evaluate(c, row, rule, scope_ids=()):
                 }
             )
             continue
-        sql, args = predicate({field: value})
+        sql, args = predicate(
+            {
+                field: value,
+                **(
+                    {"date_basis": rule["date_basis"]}
+                    if field in ("date_from", "date_to") and "date_basis" in rule
+                    else {}
+                ),
+            }
+        )
         val = c.execute(
-            "SELECT (" + sql + ") FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.id=?",
+            "SELECT ("
+            + sql
+            + ") FROM files f LEFT JOIN effective_assets a ON a.hash=f.hash WHERE f.id=?",
             (*args, row["id"]),
         ).fetchone()[0]
         status = "matched" if val == 1 else "not_matched" if val == 0 else "unknown"

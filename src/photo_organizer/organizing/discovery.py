@@ -52,7 +52,8 @@ def suggest(state, result_id, method="theme", threshold=0.75, gap_hours=8, space
             dated = []
             for row in rows:
                 a = c.execute(
-                    "SELECT taken,latitude,longitude FROM assets WHERE hash=?", (row["hash"],)
+                    "SELECT taken,latitude,longitude FROM effective_assets WHERE hash=?",
+                    (row["hash"],),
                 ).fetchone()
                 if not a["taken"]:
                     unknown.append(row["file_id"])
@@ -78,7 +79,13 @@ def suggest(state, result_id, method="theme", threshold=0.75, gap_hours=8, space
             key = None
             for t, zone, fid, lat, lon in dated:
                 far = False
-                if previous and lat is not None and previous[3] is not None:
+                if (
+                    previous
+                    and lat is not None
+                    and lon is not None
+                    and previous[3] is not None
+                    and previous[4] is not None
+                ):
                     import math
 
                     a = (

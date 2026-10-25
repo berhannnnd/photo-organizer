@@ -34,6 +34,11 @@ FIELDS = {
 def configure(state, role, config):
     if role not in ROLES or not isinstance(config, dict) or set(config) - FIELDS:
         raise ValueError("unknown role or configuration fields")
+    for field in ("model", "revision", "space", "language", "detector_path", "recognizer_path"):
+        if field in config and (
+            not isinstance(config[field], str) or not 1 <= len(config[field]) <= 2000
+        ):
+            raise ValueError("invalid " + field)
     protocol = config.get("protocol")
     if protocol not in ROLES[role]:
         raise CapabilityError(
@@ -46,6 +51,8 @@ def configure(state, role, config):
         raise ValueError("use a credential environment variable name")
     if protocol in ("anthropic", "openai", "ollama", "openai-text", "photo-http"):
         endpoint = config.get("endpoint", "")
+        if not isinstance(endpoint, str):
+            raise ValueError("endpoint must be a URL string")
         u = urlparse(endpoint)
         local = u.hostname in ("localhost", "127.0.0.1", "::1")
         if (
@@ -62,7 +69,7 @@ def configure(state, role, config):
         if protocol in ("openai-text", "photo-http") and not config.get("revision"):
             raise ValueError("explicit remote model revision required")
         if (
-            role in ("image_text", "description_text")
+            role in ("image_text", "description_text", "faces")
             and protocol == "photo-http"
             and not config.get("space")
         ):
@@ -138,6 +145,7 @@ def diagnose(state, required=None):
         "metadata_available": True,
         "next_actions": ["capability-configure", "capability-probe"],
         "host_native_vision_required": False,
+        "status_semantics": "last probe result; not a live reachability or quality guarantee",
     }
 
 
@@ -227,7 +235,9 @@ def probe(state, role, result_id=None, file_id=None, text="a photograph", expect
                         )
         report["real_input_verified"] = True
         status = "available"
-    except CapabilityError as error:
+    except (CapabilityError, ValueError, OSError) as error:
+        if not isinstance(error, CapabilityError):
+            error = CapabilityError("probe_failed", "Probe validation or local dependency failed")
         report["error"] = {"code": error.code, "message": str(error), "retryable": error.retryable}
         status = "unreachable" if error.code == "unreachable" else "verification_failed"
     with connect(state) as c:

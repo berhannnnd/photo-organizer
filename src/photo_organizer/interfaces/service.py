@@ -31,6 +31,19 @@ def dispatch(state, operation, arguments):
     if not isinstance(arguments, dict):
         return failure("invalid_request", "arguments must be an object")
     try:
+        if operation not in (*OPERATIONS, *EXTENSIONS):
+            return failure("unsupported_operation", "unknown operation")
+        from jsonschema import Draft202012Validator
+
+        from photo_organizer.interfaces.discovery import operation_schema
+
+        schema = operation_schema(state, operation)["input_schema"]
+        error = next(Draft202012Validator(schema).iter_errors(arguments), None)
+        if error:
+            location = ".".join(str(x) for x in error.absolute_path) or "arguments"
+            return failure(
+                "invalid_request", location + " does not satisfy " + str(error.validator)
+            )
         if operation == "capabilities":
             if arguments:
                 raise ValueError("capabilities takes no arguments")

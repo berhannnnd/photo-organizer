@@ -109,8 +109,8 @@ class FlowTests(unittest.TestCase):
             plan(self.state, {"group_by": "rules", "groups": [{"name": "../bad", "where": {}}]})
         out = self.base / "out"
         out.symlink_to(self.root, target_is_directory=True)
-        p = plan(self.state, {}, out, "copy")
-        self.assertEqual(len(apply(self.state, p["plan_id"])["errors"]), 2)
+        with self.assertRaisesRegex(ValueError, "ancestor"):
+            plan(self.state, {}, out, "copy")
 
     def test_no_clobber_existing_same_bytes(self):
         p = plan(self.state, {}, self.base / "out", "copy")

@@ -4,6 +4,7 @@ import base64
 import json
 
 from photo_organizer.capabilities.registry import get_config, vision
+from photo_organizer.runtime.context import checkpoint
 from photo_organizer.storage.catalog import connect
 
 
@@ -57,6 +58,7 @@ def execute(state, operation, spec, row):
         blob = encoder.encode(
             {"image": base64.b64encode(Path(asset["derivative"]).read_bytes()).decode()}
         )
+        checkpoint()
         with connect(state) as c:
             register(c, encoder, blob)
             c.execute(
@@ -69,6 +71,7 @@ def execute(state, operation, spec, row):
         if asset["vision_state"] == "complete" and asset["vision_version"] == provider.version:
             return {"cached": True}
         label, metrics = provider.label(asset["derivative"])
+        checkpoint()
         import uuid
 
         from photo_organizer.search.selection import now
@@ -108,6 +111,7 @@ def execute(state, operation, spec, row):
             ).fetchone():
                 return {"cached": True}
         obj, metrics = provider.judge(asset["derivative"], spec["condition"])
+        checkpoint()
         with connect(state) as c:
             c.execute(
                 "INSERT INTO conditions VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET version=excluded.version",

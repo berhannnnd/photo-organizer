@@ -93,6 +93,29 @@ def main():
         return dispatch(args.state, operation, arguments)
 
     @mcp.tool()
+    def photo_image(
+        result_id: str, file_id: int, long_edge: int = 1280, crop: list[int] | None = None
+    ):
+        """Read a scoped image as native MCP image content for visual hosts."""
+        import json
+
+        from mcp.types import ImageContent, TextContent
+
+        response = dispatch(
+            args.state,
+            "image",
+            {"result_id": result_id, "file_id": file_id, "long_edge": long_edge, "crop": crop},
+        )
+        if response["status"] != "completed":
+            return [TextContent(type="text", text=json.dumps(response))]
+        picture = dict(response["data"])
+        data = picture.pop("data")
+        return [
+            TextContent(type="text", text=json.dumps(picture)),
+            ImageContent(type="image", data=data, mimeType="image/jpeg"),
+        ]
+
+    @mcp.tool()
     def photo_operation_schema(operation: str) -> dict:
         """Discover accepted arguments through the same contract as CLI."""
         return dispatch(args.state, "operation-schema", {"operation": operation})

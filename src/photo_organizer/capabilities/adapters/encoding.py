@@ -5,6 +5,7 @@ import json
 
 from photo_organizer.capabilities.adapters.http import request
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.library.imaging import PREPROCESSING
 
 
 class Encoder:
@@ -38,7 +39,7 @@ class Encoder:
                     self.digest,
                     config.get("space"),
                     config["protocol"],
-                    "pillow-orient-rgb-1280-q82-v1",
+                    PREPROCESSING,
                 ]
             ).encode()
         ).hexdigest()
@@ -63,7 +64,12 @@ class Encoder:
             vectors = response.get("embeddings")
         elif protocol == "openai-text":
             response = request(self.config, {"model": self.model, "input": value})
-            vectors = [r["embedding"] for r in response.get("data", [])]
+            data = response.get("data")
+            if not isinstance(data, list) or any(
+                not isinstance(r, dict) or "embedding" not in r for r in data
+            ):
+                raise CapabilityError("invalid_response", "Missing embeddings")
+            vectors = [r["embedding"] for r in data]
         else:
             response = request(
                 self.config, {"operation": "embed", "model": self.model, "input": value}

@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.runtime.admission import Admission, JobBoundary
+from photo_organizer.runtime.context import execution_context
 from photo_organizer.search.selection import now
 from photo_organizer.storage.catalog import connect, writer_lock
 
@@ -19,8 +21,32 @@ def run(state, task_id):
             return _run(state, task_id)
     except ValueError as error:
         if "another writer" not in str(error):
+            with connect(state) as c:
+                c.execute(
+                    "UPDATE jobs SET status='failed',owner=NULL,error=?,updated=? WHERE id=?",
+                    (
+                        json.dumps({"code": "worker_failed", "message": type(error).__name__}),
+                        now(),
+                        task_id,
+                    ),
+                )
             raise
         return {"task_id": task_id, "status": "owned_by_another_worker"}
+    except Exception as error:
+        with connect(state) as c:
+            c.execute(
+                "UPDATE jobs SET status='failed',owner=NULL,error=?,updated=? WHERE id=?",
+                (
+                    json.dumps({"code": "worker_failed", "message": type(error).__name__}),
+                    now(),
+                    task_id,
+                ),
+            )
+            c.execute(
+                "UPDATE job_items SET status='pending' WHERE job_id=? AND status='running'",
+                (task_id,),
+            )
+        raise
 
 
 def _run(state, task_id):
@@ -49,6 +75,9 @@ def _run(state, task_id):
             c.execute("BEGIN IMMEDIATE")
             job = c.execute("SELECT * FROM jobs WHERE id=?", (task_id,)).fetchone()
             progress["seconds"] = previous_seconds + time.monotonic() - started
+            progress["time_budget_overrun_seconds"] = max(
+                0, progress["seconds"] - budget.get("max_seconds", float("inf"))
+            )
             if job["control"] in ("pause", "cancel"):
                 state_name = "paused" if job["control"] == "pause" else "cancelled"
                 c.execute(
@@ -79,51 +108,9 @@ def _run(state, task_id):
                     (final, json.dumps(progress), json.dumps(final_result), now(), task_id),
                 )
                 return
-            changed = any(
-                c.execute(
-                    "SELECT revision FROM capability_configs WHERE role=?", (role,)
-                ).fetchone()[0]
-                != rev
-                for role, rev in spec["capability_revisions"].items()
-            )
-            model = operation in MODEL_JOBS
-            reached = (
-                progress["seconds"] >= budget.get("max_seconds", float("inf"))
-                or (
-                    item["attempts"] == 0
-                    and operation not in ("scan", "apply")
-                    and progress.get("images", 0) >= budget.get("max_images", float("inf"))
-                )
-                or model
-                and progress.get("requests", 0) >= budget.get("max_requests", float("inf"))
-                or model
-                and (progress.get("requests", 0) + 1) * budget.get("max_request_cost", 0)
-                > budget.get("max_cost", float("inf"))
-            )
-            if changed or reached:
-                error = {
-                    "code": "version_conflict" if changed else "budget_exhausted",
-                    "message": "Configuration changed"
-                    if changed
-                    else "Increase budget to resume; completed items are preserved",
-                }
-                c.execute(
-                    "UPDATE jobs SET status='needs_input',owner=NULL,error=?,progress=?,updated=? WHERE id=?",
-                    (json.dumps(error), json.dumps(progress), now(), task_id),
-                )
-                return
             c.execute(
                 "UPDATE job_items SET status='running',attempts=attempts+1 WHERE job_id=? AND item_id=?",
                 (task_id, item["item_id"]),
-            )
-            # Reserve before dispatch; a crash cannot silently erase possible request cost.
-            if model:
-                progress["requests"] = progress.get("requests", 0) + 1
-            if operation not in ("scan", "apply") and item["attempts"] == 0:
-                progress["images"] = progress.get("images", 0) + 1
-            c.execute(
-                "UPDATE jobs SET progress=?,updated=? WHERE id=?",
-                (json.dumps(progress), now(), task_id),
             )
         payload = json.loads(item["result"])["input"]
         error = None
@@ -139,15 +126,53 @@ def _run(state, task_id):
                     sort_keys=True,
                 ).encode()
             ).hexdigest()
-            with writer_lock(Path(state) / "stage-locks" / stage):
-                output = execute(state, operation, spec, payload)
+            admission = Admission(
+                state,
+                task_id,
+                item["item_id"],
+                operation,
+                spec,
+                progress,
+                budget,
+                started,
+                previous_seconds,
+            )
+            with execution_context(
+                background=True, admission=admission.reserve, checkpoint=admission.checkpoint
+            ):
+                admission.checkpoint()
+                with writer_lock(Path(state) / "stage-locks" / stage):
+                    output = execute(state, operation, spec, payload)
+        except JobBoundary as boundary:
+            with connect(state) as c:
+                c.execute(
+                    "UPDATE job_items SET status='pending' WHERE job_id=? AND item_id=?",
+                    (task_id, item["item_id"]),
+                )
+                c.execute(
+                    "UPDATE jobs SET status=?,owner=NULL,error=?,progress=?,updated=? WHERE id=?",
+                    (
+                        boundary.status,
+                        json.dumps({"code": boundary.code, "message": str(boundary)}),
+                        json.dumps(progress),
+                        now(),
+                        task_id,
+                    ),
+                )
+            return
         except Exception as e:
             error = {
-                "code": e.code if isinstance(e, CapabilityError) else "operation_failed",
+                "code": e.code
+                if isinstance(e, CapabilityError)
+                else "stage_busy"
+                if isinstance(e, ValueError) and "another writer" in str(e)
+                else "operation_failed",
                 "message": str(e)[:300]
                 if isinstance(e, (CapabilityError, ValueError, OSError))
                 else type(e).__name__,
-                "retryable": isinstance(e, CapabilityError) and e.retryable,
+                "retryable": (isinstance(e, CapabilityError) and e.retryable)
+                or (isinstance(e, ValueError) and "another writer" in str(e)),
+                "retry_after": getattr(e, "retry_after", None),
             }
             output = None
         with connect(state) as c:
@@ -187,7 +212,8 @@ def _run(state, task_id):
             )
         if error and retry:
             # Short interruptible backoff: controls remain responsive.
-            for _ in range(2 ** (item["attempts"] + 1) * 5):
+            delay = max(2 ** (item["attempts"] + 1), error.get("retry_after") or 0)
+            for _ in range(int(delay * 5) + 1):
                 time.sleep(0.2)
                 with connect(state) as c:
                     if c.execute("SELECT control FROM jobs WHERE id=?", (task_id,)).fetchone()[0]:

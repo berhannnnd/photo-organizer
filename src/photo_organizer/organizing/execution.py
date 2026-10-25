@@ -1,13 +1,15 @@
 """No-clobber export with per-action journals and inode-backed publication recovery."""
 
 import hashlib
+import io
 import json
 import os
 import time
 from pathlib import Path
 
-from PIL import Image, ImageOps
+from PIL import Image
 
+from photo_organizer.library.imaging import normalized
 from photo_organizer.storage.catalog import connect, writer_lock
 from photo_organizer.storage.filesystem import (
     digest,
@@ -87,16 +89,8 @@ def export_one(c, row, plan, spec):
                         raise ValueError("source changed since plan")
                     source.seek(0)
                     with Image.open(source) as im:
-                        im = ImageOps.exif_transpose(im)
+                        im = normalized(im)
                         im.thumbnail((spec.get("long_edge", 1600),) * 2)
-                        if im.mode == "RGBA":
-                            bg = Image.new("RGB", im.size, "white")
-                            bg.paste(im, mask=im.getchannel("A"))
-                            im = bg
-                        else:
-                            im = im.convert("RGB")
-                        import io
-
                         quality = spec.get("quality", 82)
                         while True:
                             encoded = io.BytesIO()
@@ -108,6 +102,11 @@ def export_one(c, row, plan, spec):
                                     "cannot meet max_bytes without changing requested dimensions; adjust export settings"
                                 )
                             quality = max(10, quality - 5)
+                        encoded.seek(0)
+                        with Image.open(encoded) as checked:
+                            checked.load()
+                            if checked.size != im.size or checked.format != "JPEG":
+                                raise ValueError("compressed output validation failed")
                         out.write(encoded.getvalue())
                     source.seek(0)
                     if digest_file(source) != row["hash"]:

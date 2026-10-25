@@ -102,18 +102,9 @@ def start(state, operation, arguments, budget=None, background=True):
     if type(background) is not bool:
         raise ValueError("background must be boolean")
     with writer_lock(Path(state) / "jobs-lock"), connect(state) as c:
-        roles = {
-            "index": ["vision"],
-            "review": ["vision"],
-            "embed": ["image_text"],
-            "ocr": ["ocr", "vision"],
-            "faces": ["faces"],
-        }.get(operation, [])
-        revisions = {
-            r["role"]: r["revision"]
-            for r in c.execute("SELECT role,revision FROM capability_configs")
-            if r["role"] in roles
-        }
+        from photo_organizer.runtime.admission import revisions as bound_revisions
+
+        revisions = bound_revisions(c, operation)
         spec = {**arguments, "capability_revisions": revisions}
         key = json.dumps([operation, spec], sort_keys=True)
         for existing in c.execute(
@@ -227,18 +218,9 @@ def control(state, task_id, action, budget=None, rebind=False):
                     "SELECT operation,arguments FROM jobs WHERE id=?", (task_id,)
                 ).fetchone()
                 spec = json.loads(job["arguments"])
-                roles = {
-                    "index": ["vision"],
-                    "review": ["vision"],
-                    "embed": ["image_text"],
-                    "ocr": ["ocr", "vision"],
-                    "faces": ["faces"],
-                }.get(job["operation"], [])
-                spec["capability_revisions"] = {
-                    x["role"]: x["revision"]
-                    for x in c.execute("SELECT role,revision FROM capability_configs")
-                    if x["role"] in roles
-                }
+                from photo_organizer.runtime.admission import revisions as bound_revisions
+
+                spec["capability_revisions"] = bound_revisions(c, job["operation"])
                 c.execute("UPDATE jobs SET arguments=? WHERE id=?", (json.dumps(spec), task_id))
                 if job["operation"] in MODEL_JOBS:
                     c.execute(
@@ -248,7 +230,16 @@ def control(state, task_id, action, budget=None, rebind=False):
                     c.execute(
                         "UPDATE jobs SET progress=? WHERE id=?",
                         (
-                            json.dumps({"completed": 0, "requests": 0, "images": 0, "seconds": 0}),
+                            json.dumps(
+                                {
+                                    **json.loads(
+                                        c.execute(
+                                            "SELECT progress FROM jobs WHERE id=?", (task_id,)
+                                        ).fetchone()[0]
+                                    ),
+                                    "completed": 0,
+                                }
+                            ),
                             task_id,
                         ),
                     )

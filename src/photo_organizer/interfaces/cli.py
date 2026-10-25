@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 
-from photo_organizer.library.ingest import scan
+from photo_organizer.library.lifecycle import synchronize as scan
 from photo_organizer.organizing.execution import apply
 from photo_organizer.organizing.planning import plan
 from photo_organizer.search.query import search

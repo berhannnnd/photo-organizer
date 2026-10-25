@@ -44,6 +44,12 @@ class MCPTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn("parent_id", {p["name"] for p in schema["arguments"]})
                     await call("photo_scan", {"root": str(root)})
                     result = await call("photo_search", {"rule": {}})
+                    image = await client.call_tool(
+                        "photo_image",
+                        {"result_id": result["result_set_id"], "file_id": result["items"][0]["id"]},
+                    )
+                    self.assertFalse(image.isError)
+                    self.assertTrue(any(x.type == "image" for x in image.content))
                     child = await call(
                         "photo_search",
                         {

@@ -5,7 +5,9 @@ import os
 import urllib.error
 import urllib.request
 
+from photo_organizer.capabilities.scheduling import provider_slot
 from photo_organizer.core.errors import CapabilityError
+from photo_organizer.runtime.context import admit
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -17,6 +19,11 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 
 def request(config, body, path="", headers=None):
+    with provider_slot(config):
+        return _request(config, body, path, headers)
+
+
+def _request(config, body, path="", headers=None):
     credential = config.get("api_key_env")
     key = os.environ.get(credential) if credential else None
     if credential and not key:
@@ -33,6 +40,8 @@ def request(config, body, path="", headers=None):
         data=json.dumps(body).encode() if body is not None else None,
         headers=h,
     )
+    if body is not None:
+        admit(remote=True)
     try:
         with urllib.request.build_opener(NoRedirect).open(
             req, timeout=config.get("timeout", 90)
@@ -40,9 +49,35 @@ def request(config, body, path="", headers=None):
             data = response.read(8_000_001)
             if len(data) > 8_000_000:
                 raise CapabilityError("invalid_response", "Model response exceeds byte budget")
-            return json.loads(data)
+            value = json.loads(data)
+            if not isinstance(value, dict):
+                raise CapabilityError("invalid_response", "Provider JSON must be an object")
+            return value
     except urllib.error.HTTPError as e:
         status = e.code
+        retry_after = e.headers.get("Retry-After")
+        delay = None
+        if retry_after:
+            try:
+                delay = max(0, float(retry_after))
+            except ValueError:
+                import datetime
+                from email.utils import parsedate_to_datetime
+
+                try:
+                    delay = max(
+                        0,
+                        (
+                            parsedate_to_datetime(retry_after)
+                            - datetime.datetime.now(datetime.timezone.utc)
+                        ).total_seconds(),
+                    )
+                except (ValueError, TypeError, OverflowError):
+                    pass
+        import math
+
+        if delay is not None and not math.isfinite(delay):
+            delay = None
         e.close()
         code = {
             401: "authentication_failed",
@@ -52,7 +87,7 @@ def request(config, body, path="", headers=None):
             400: "unsupported_input",
         }.get(status, "provider_failed")
         raise CapabilityError(
-            code, "Provider HTTP " + str(status), status == 429 or status >= 500
+            code, "Provider HTTP " + str(status), status == 429 or status >= 500, retry_after=delay
         ) from None
     except (urllib.error.URLError, TimeoutError):
         raise CapabilityError(

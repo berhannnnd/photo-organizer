@@ -89,6 +89,14 @@ class Provider:
         return obj
 
     def request(self, path, prompt):
+        from photo_organizer.capabilities.scheduling import provider_slot
+        from photo_organizer.runtime.context import admit
+
+        with provider_slot({"endpoint": self.url}):
+            admit(True)
+            return self._request(path, prompt)
+
+    def _request(self, path, prompt):
         content = Path(path).read_bytes()
         if len(content) > 4_000_000:
             raise ProviderError("image exceeds configured request byte budget")

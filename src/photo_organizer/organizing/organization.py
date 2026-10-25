@@ -6,6 +6,7 @@ import unicodedata
 import uuid
 from pathlib import Path
 
+from photo_organizer.core.paging import page, validate
 from photo_organizer.search.selection import members, now, save
 from photo_organizer.storage.catalog import connect, writer_lock
 
@@ -95,12 +96,32 @@ def propose(state, result_id, groups, parent_id=None, overlap="error", reason=""
     }
 
 
-def group_detail(state, group_spec_id):
+def group_detail(state, group_spec_id, limit=50, offset=0, group=None):
+    """Page group summaries, or member IDs in a named group path (unclassified for leftovers)."""
+    validate(limit, offset)
     with connect(state) as c:
         r = c.execute("SELECT * FROM group_specs WHERE id=?", (group_spec_id,)).fetchone()
         if not r:
             raise ValueError("unknown group spec")
-        return {**dict(r), "definition": json.loads(r["definition"])}
+        definition = json.loads(r["definition"])
+        if group is None:
+            items = [{"path": g["path"], "count": len(g["ids"])} for g in definition["groups"]]
+        elif group == "unclassified":
+            items = definition["unassigned"]
+        else:
+            matches = [g["ids"] for g in definition["groups"] if "/".join(g["path"]) == group]
+            if not matches:
+                raise ValueError("unknown group path")
+            items = matches[0]
+        return {
+            "group_spec_id": r["id"],
+            "result_id": r["result_id"],
+            "parent_id": r["parent_id"],
+            "overlap": definition["overlap"],
+            "reason": definition["reason"],
+            "unassigned": len(definition["unassigned"]),
+            **page(items[offset : offset + limit], len(items), limit, offset),
+        }
 
 
 def group_paths(c, group_spec_id, result_id):
@@ -201,15 +222,19 @@ def record_collection(c, plan):
     return cid, rid
 
 
-def collection(state, collection_id=None, name=None, group=None):
+def collection(state, collection_id=None, name=None, group=None, limit=50, offset=0):
+    validate(limit, offset)
     with writer_lock(state), connect(state) as c:
         if collection_id is None:
-            return {
-                "collections": [
-                    dict(r)
-                    for r in c.execute("SELECT * FROM collections ORDER BY created DESC LIMIT 100")
-                ]
-            }
+            total = c.execute("SELECT count(*) FROM collections").fetchone()[0]
+            items = [
+                dict(r)
+                for r in c.execute(
+                    "SELECT * FROM collections ORDER BY created DESC,id LIMIT ? OFFSET ?",
+                    (limit, offset),
+                )
+            ]
+            return page(items, total, limit, offset, "collections")
         r = c.execute("SELECT * FROM collections WHERE id=?", (collection_id,)).fetchone()
         if not r:
             raise ValueError("unknown collection")
@@ -239,10 +264,19 @@ def collection(state, collection_id=None, name=None, group=None):
             "collection_id": collection_id,
             "name": name or r["name"],
             "result_set_id": rid,
+            "group_pagination": page(
+                [],
+                c.execute(
+                    "SELECT count(DISTINCT group_path) FROM collection_members WHERE collection_id=?",
+                    (collection_id,),
+                ).fetchone()[0],
+                limit,
+                offset,
+            ),
             "groups": dict(
                 c.execute(
-                    "SELECT group_path,count(*) FROM collection_members WHERE collection_id=? GROUP BY group_path",
-                    (collection_id,),
+                    "SELECT group_path,count(*) FROM collection_members WHERE collection_id=? GROUP BY group_path ORDER BY group_path LIMIT ? OFFSET ?",
+                    (collection_id, limit, offset),
                 )
             ),
         }

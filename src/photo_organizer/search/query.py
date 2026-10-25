@@ -8,13 +8,18 @@ from photo_organizer.storage.catalog import report
 
 def compile_rule(rule):
     sql, args = predicate(rule)
-    return "f.present=1 AND f.error IS NULL AND (" + sql + ")", args
+    return (
+        "f.present=1 AND f.error IS NULL AND NOT EXISTS(SELECT 1 FROM roots rt WHERE rt.path=f.root AND (rt.status='offline' OR rt.enabled=0)) AND ("
+        + sql
+        + ")",
+        args,
+    )
 
 
 def select(c, rule):
     where, args = compile_rule(rule)
     return c.execute(
-        "SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state FROM files f JOIN assets a ON a.hash=f.hash WHERE "
+        "SELECT f.id,f.path,f.hash,a.taken,a.width,a.height,a.category,a.vision_state FROM files f JOIN effective_assets a ON a.hash=f.hash WHERE "
         + where
         + " ORDER BY f.id",
         args,
@@ -32,13 +37,13 @@ def search(c, rule, limit=50, offset=0):
             + sql
             + ") THEN 'matched' WHEN NOT ("
             + sql
-            + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END,count(*) FROM files f LEFT JOIN assets a ON a.hash=f.hash WHERE f.present=1 GROUP BY 1",
+            + ") THEN 'not_matched' ELSE 'unknown_or_unanalyzed' END,count(*) FROM files f LEFT JOIN effective_assets a ON a.hash=f.hash WHERE f.present=1 GROUP BY 1",
             args + args,
         ).fetchall()
     )
     where, args = compile_rule(rule)
     rows = c.execute(
-        "SELECT f.id,f.path,f.hash,a.taken,a.caption,a.category FROM files f JOIN assets a ON a.hash=f.hash WHERE "
+        "SELECT f.id,f.path,f.hash,a.taken,a.caption,a.category FROM files f JOIN effective_assets a ON a.hash=f.hash WHERE "
         + where
         + " ORDER BY f.id LIMIT ? OFFSET ?",
         [*args, limit, offset],

@@ -22,7 +22,10 @@ def operation_schema(state, operation):
         "describe-index": embeddings.index_descriptions,
         "retrieve": retrieval.search,
     }
-    if operation in ("capabilities", "status"):
+    if operation == "operation-schema":
+        parameters = [{"name": "operation", "required": True}]
+        description = "Return JSON Schema and argument discovery for a named operation."
+    elif operation in ("capabilities", "status"):
         parameters = []
         description = "Read current engine capabilities or catalog status."
     elif operation == "review":
@@ -46,4 +49,16 @@ def operation_schema(state, operation):
             for p in inspect.signature(function).parameters.values()
             if p.name != "state"
         ]
-    return {"operation": operation, "description": description, "arguments": parameters}
+    from photo_organizer.interfaces.schemas import RULE, argument_schema, obj
+
+    properties = {p["name"]: argument_schema(operation, p) for p in parameters}
+    schema = obj(properties, [p["name"] for p in parameters if p["required"]])
+    schema.update(
+        {"$schema": "https://json-schema.org/draft/2020-12/schema", "$defs": {"rule": RULE}}
+    )
+    return {
+        "operation": operation,
+        "description": description,
+        "arguments": parameters,
+        "input_schema": schema,
+    }

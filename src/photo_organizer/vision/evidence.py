@@ -5,8 +5,9 @@ import io
 import json
 import uuid
 
-from PIL import Image, ImageOps
+from PIL import Image
 
+from photo_organizer.library.imaging import normalized
 from photo_organizer.search.predicates import condition_key
 from photo_organizer.search.selection import members, now
 from photo_organizer.storage.catalog import connect, writer_lock
@@ -40,7 +41,21 @@ def submit(state, result_id, records, source, condition=None, expected_version=N
         raise ValueError("invalid condition")
     condition = condition.strip() if condition else None
     with writer_lock(state), connect(state) as c:
-        scope = {r["file_id"]: r for r in members(c, result_id)}
+        scope = {
+            r["file_id"]: r
+            for r in members(
+                c,
+                result_id,
+                (
+                    "matched",
+                    "candidate",
+                    "unknown",
+                    "unanalyzed",
+                    "not_matched",
+                    "unknown_or_unanalyzed",
+                ),
+            )
+        }
         key = condition_key(condition) if condition else None
         active = (
             c.execute("SELECT version FROM conditions WHERE id=?", (key,)).fetchone()
@@ -199,7 +214,21 @@ def image(state, result_id, file_id, long_edge=1280, crop=None):
     if type(long_edge) is not int or not 64 <= long_edge <= 4096:
         raise ValueError("long_edge must be 64..4096")
     with connect(state) as c:
-        scope = {r["file_id"]: r for r in members(c, result_id)}
+        scope = {
+            r["file_id"]: r
+            for r in members(
+                c,
+                result_id,
+                (
+                    "matched",
+                    "candidate",
+                    "unknown",
+                    "unanalyzed",
+                    "not_matched",
+                    "unknown_or_unanalyzed",
+                ),
+            )
+        }
         if file_id not in scope:
             raise ValueError("image outside selected scope")
         row = scope[file_id]
@@ -209,7 +238,7 @@ def image(state, result_id, file_id, long_edge=1280, crop=None):
             raise ValueError("source changed since selection")
         f.seek(0)
         with Image.open(f) as original:
-            im = ImageOps.exif_transpose(original).convert("RGB")
+            im = normalized(original)
             if crop is not None:
                 if (
                     not isinstance(crop, list)

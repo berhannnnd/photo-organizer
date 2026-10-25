@@ -102,6 +102,13 @@ def plan(state, spec, target=None, mode="album"):
                     raise ValueError("destination path exceeds 2048 bytes")
                 destinations.add(collision)
                 relative_parts(relative)
+                if mode != "album":
+                    destination = target / relative
+                    if destination.exists() or destination.is_symlink():
+                        raise ValueError("destination already exists: " + relative)
+                    for ancestor in (target, *destination.parents):
+                        if ancestor.is_symlink() or (ancestor.exists() and not ancestor.is_dir()):
+                            raise ValueError("destination ancestor is not a regular directory")
                 actions.append(
                     (uuid.uuid4().hex, plan_id, row["id"], row["path"], row["hash"], relative)
                 )
