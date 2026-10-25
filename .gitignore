@@ -1,0 +1,14 @@
+data/
+references/cloud-photo/
+.photo-organizer/
+.venv/
+__pycache__/
+.DS_Store
+
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+benchmarks/results/
+.env
+*.local.json

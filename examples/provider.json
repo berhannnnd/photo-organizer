@@ -1,0 +1,6 @@
+{
+  "protocol": "anthropic",
+  "endpoint": "https://api.anthropic.com/v1/messages",
+  "model": "REPLACE_WITH_YOUR_IMAGE_CAPABLE_MODEL_ID",
+  "api_key_env": "PHOTO_VISION_API_KEY"
+}
